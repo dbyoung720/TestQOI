@@ -124,7 +124,8 @@ var
   T1, T2: Int64;
   mmQoi : TMemoryStream;
 begin
-  mmQoi := TMemoryStream.Create;
+  btnQoiImage.Enabled := False;
+  mmQoi               := TMemoryStream.Create;
   try
     { QoiImage encode }
     QOI := TQoiImage.Create;
@@ -156,6 +157,7 @@ begin
     end;
   finally
     mmQoi.Free;
+    btnQoiImage.Enabled := True;
   end;
 end;
 
