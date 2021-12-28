@@ -3,15 +3,18 @@ unit Unit1;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, System.Diagnostics, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.Imaging.pngimage, Vcl.StdCtrls, Vcl.ExtCtrls;
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, System.Diagnostics,
+  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.Imaging.pngimage, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Imaging.QOI;
 
 type
   TForm1 = class(TForm)
     btnPNG: TButton;
     btnQOI: TButton;
     imgShow: TImage;
+    btnQoiImage: TButton;
     procedure btnPNGClick(Sender: TObject);
-    procedure btnQOIClick(Sender: TObject);
+    procedure btnQoiClick(Sender: TObject);
+    procedure btnQoiImageClick(Sender: TObject);
   end;
 
 var
@@ -61,7 +64,7 @@ begin
   Caption := Format('PNG encode£º%d ms£»decode£º%d ms', [T1, T2]);
 end;
 
-procedure TForm1.btnQOIClick(Sender: TObject);
+procedure TForm1.btnQoiClick(Sender: TObject);
 var
   bmpSrc   : TBitmap;
   bmpDst   : TBitmap;
@@ -69,8 +72,8 @@ var
   srcBits  : Pointer;
   pixelsQOI: PByte;
   pixelsRGB: PByte;
-  pQOI     : qoi_desc;
-  pQOI2    : qoi_desc;
+  pQoi     : qoi_desc;
+  pQoi2    : qoi_desc;
   outlen   : Integer;
 begin
   btnQOI.Enabled := False;
@@ -84,24 +87,24 @@ begin
     { QOI encode }
     with TStopwatch.StartNew do
     begin
-      pQOI.Width      := bmpSrc.Width;
-      pQOI.Height     := bmpSrc.Height;
-      pQOI.channels   := 4;
-      pQOI.colorspace := 0;
-      pixelsQOI       := qoi_encode(srcBits, @pQOI, outlen);
+      pQoi.Width      := bmpSrc.Width;
+      pQoi.Height     := bmpSrc.Height;
+      pQoi.channels   := 4;
+      pQoi.colorspace := 0;
+      pixelsQOI       := qoi_encode(srcBits, @pQoi, outlen);
       T1              := ElapsedMilliseconds;
     end;
 
     { QOI decode }
     with TStopwatch.StartNew do
     begin
-      pixelsRGB := qoi_decode(pixelsQOI, outlen, @pQOI2, 0);
+      pixelsRGB := qoi_decode(pixelsQOI, outlen, @pQoi2, 0);
       T2        := ElapsedMilliseconds;
     end;
 
     bmpDst.PixelFormat := pf32bit;
-    bmpDst.Width       := pQOI2.Width;
-    bmpDst.Height      := pQOI2.Height;
+    bmpDst.Width       := pQoi2.Width;
+    bmpDst.Height      := pQoi2.Height;
     SetBitmapBits(bmpDst.Handle, bmpDst.Width * bmpDst.Height * 4, pixelsRGB);
     imgShow.Picture.Bitmap.Assign(bmpDst);
 
@@ -112,7 +115,48 @@ begin
     bmpDst.Free;
     btnQOI.Enabled := True;
   end;
-  Caption := Format('QOI encode£º%d ms£»decode£º%d ms', [T1, T2]);
+  Caption := Format('Qoi(Obj) encode£º%d ms£»decode£º%d ms', [T1, T2]);
+end;
+
+procedure TForm1.btnQoiImageClick(Sender: TObject);
+var
+  QOI   : TQoiImage;
+  T1, T2: Int64;
+  mmQoi : TMemoryStream;
+begin
+  mmQoi := TMemoryStream.Create;
+  try
+    { QoiImage encode }
+    QOI := TQoiImage.Create;
+    try
+      QOI.Image.LoadFromFile('test.bmp');
+      with TStopwatch.StartNew do
+      begin
+        QOI.SaveToStream(mmQoi);
+        T1 := ElapsedMilliseconds;
+      end;
+    finally
+      QOI.Free;
+    end;
+
+    { QoiImage decode }
+    QOI := TQoiImage.Create;
+    try
+      mmQoi.Position := 0;
+      with TStopwatch.StartNew do
+      begin
+        QOI.LoadFromStream(mmQoi);
+        T2 := ElapsedMilliseconds;
+      end;
+
+      imgShow.Picture.Bitmap.Assign(QOI.Image);
+      Caption := Format('QoiImage encode£º%d ms£»decode£º%d ms', [T1, T2]);
+    finally
+      QOI.Free;
+    end;
+  finally
+    mmQoi.Free;
+  end;
 end;
 
 end.

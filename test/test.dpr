@@ -7,7 +7,8 @@ program test;
 uses
   Vcl.Forms,
   Unit1 in 'Unit1.pas' {Form1},
-  uQOI in 'uQOI.pas';
+  uQOI in 'uQOI.pas',
+  Vcl.Imaging.QOI in '..\TQoiImage\Vcl.Imaging.QOI.pas';
 
 {$R *.res}
 

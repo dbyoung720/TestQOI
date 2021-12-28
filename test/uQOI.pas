@@ -19,8 +19,6 @@ type
     colorspace: Byte;
   end;
 
-function qoi_write(const filename: PAnsiChar; const data: Pointer; const desc: Pqoi_desc): Integer; cdecl; external name {$IFDEF WIN32} '_qoi_write'; {$ELSE} 'qoi_write'; {$ENDIF}
-function qoi_read(const filename: PAnsiChar; desc: Pqoi_desc; channels: Integer): Pointer; cdecl; external name {$IFDEF WIN32} '_qoi_read'; {$ELSE} 'qoi_read'; {$ENDIF}
 function qoi_encode(const data: Pointer; const desc: Pqoi_desc; var outlen: Integer): Pointer; cdecl; external name {$IFDEF WIN32} '_qoi_encode'; {$ELSE} 'qoi_encode'; {$ENDIF}
 function qoi_decode(const data: Pointer; size: Integer; desc: Pqoi_desc; channels: Integer): Pointer; cdecl; external name {$IFDEF WIN32} '_qoi_decode'; {$ELSE} 'qoi_decode'; {$ENDIF}
 
