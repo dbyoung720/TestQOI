@@ -4,3 +4,6 @@
 [submodule "TQoiImage"]
 	path = TQoiImage
 	url = https://github.com/AngusJohnson/TQoiImage.git
+[submodule "qoiAVX"]
+	path = qoiAVX
+	url = https://github.com/MKCG/qoi.git
