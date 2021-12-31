@@ -3,4 +3,5 @@
 *.identcache
 *.cmd
 *.pdb
-*.exe
+/test/Win32/Release/test.exe
+/test/Win32/Debug/test.exe
