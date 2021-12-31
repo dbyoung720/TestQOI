@@ -12,9 +12,11 @@ type
     btnQOI: TButton;
     imgShow: TImage;
     btnQoiImage: TButton;
+    btnQoiDBYOUNG: TButton;
     procedure btnPNGClick(Sender: TObject);
     procedure btnQoiClick(Sender: TObject);
     procedure btnQoiImageClick(Sender: TObject);
+    procedure btnQoiDBYOUNGClick(Sender: TObject);
   end;
 
 var
@@ -41,7 +43,7 @@ begin
   bmp            := TBitmap.Create;
   try
     bmp.PixelFormat := pf32bit;
-    bmp.LoadFromFile('test.bmp');
+    bmp.LoadFromFile('..\..\test.bmp');
 
     { PNG encode }
     with TStopwatch.StartNew do
@@ -75,14 +77,17 @@ var
   pQoi     : qoi_desc;
   pQoi2    : qoi_desc;
   outlen   : Integer;
+  Count    : Integer;
 begin
   btnQOI.Enabled := False;
   bmpSrc         := TBitmap.Create;
   bmpDst         := TBitmap.Create;
   try
     bmpSrc.PixelFormat := pf32bit;
-    bmpSrc.LoadFromFile('test.bmp');
-    srcBits := TBitmapImageAccess(TBMPAccess(bmpSrc).FImage).FDIB.dsBm.bmBits;
+    bmpSrc.LoadFromFile('..\..\test.bmp');
+    Count := bmpSrc.Width * bmpSrc.Height * 4;
+    GetMem(srcBits, Count);
+    GetBitmapBits(bmpSrc.Handle, Count, srcBits);
 
     { QOI encode }
     with TStopwatch.StartNew do
@@ -94,6 +99,7 @@ begin
       pixelsQOI       := qoi_encode(srcBits, @pQoi, outlen);
       T1              := ElapsedMilliseconds;
     end;
+    Freemem(srcBits);
 
     { QOI decode }
     with TStopwatch.StartNew do
@@ -108,8 +114,8 @@ begin
     SetBitmapBits(bmpDst.Handle, bmpDst.Width * bmpDst.Height * 4, pixelsRGB);
     imgShow.Picture.Bitmap.Assign(bmpDst);
 
-    FreeMem(pixelsQOI);
-    FreeMem(pixelsRGB);
+    Freemem(pixelsQOI);
+    Freemem(pixelsRGB);
   finally
     bmpSrc.Free;
     bmpDst.Free;
@@ -130,7 +136,8 @@ begin
     { QoiImage encode }
     QOI := TQoiImage.Create;
     try
-      QOI.Image.LoadFromFile('test.bmp');
+      QOI.LoadFromFile('..\..\test.bmp');
+
       with TStopwatch.StartNew do
       begin
         QOI.SaveToStream(mmQoi);
@@ -150,7 +157,7 @@ begin
         T2 := ElapsedMilliseconds;
       end;
 
-      imgShow.Picture.Bitmap.Assign(QOI.Image);
+      imgShow.Picture.Bitmap.Assign(QOI);
       Caption := Format('QoiImage encode£º%d ms£»decode£º%d ms', [T1, T2]);
     finally
       QOI.Free;
@@ -159,6 +166,11 @@ begin
     mmQoi.Free;
     btnQoiImage.Enabled := True;
   end;
+end;
+
+procedure TForm1.btnQoiDBYOUNGClick(Sender: TObject);
+begin
+  //
 end;
 
 end.

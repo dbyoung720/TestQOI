@@ -2,8 +2,8 @@ object Form1: TForm1
   Left = 0
   Top = 0
   Caption = 'Test PNG/QOI'
-  ClientHeight = 485
-  ClientWidth = 550
+  ClientHeight = 611
+  ClientWidth = 828
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -13,17 +13,18 @@ object Form1: TForm1
   Position = poScreenCenter
   PixelsPerInch = 96
   DesignSize = (
-    550
-    485)
+    828
+    611)
   TextHeight = 15
   object imgShow: TImage
     Left = 16
     Top = 72
-    Width = 519
-    Height = 405
+    Width = 797
+    Height = 531
     Anchors = [akLeft, akTop, akRight, akBottom]
     Stretch = True
     ExplicitWidth = 497
+    ExplicitHeight = 405
   end
   object btnPNG: TButton
     Left = 16
@@ -51,5 +52,14 @@ object Form1: TForm1
     Caption = 'QoiImage'
     TabOrder = 2
     OnClick = btnQoiImageClick
+  end
+  object btnQoiDBYOUNG: TButton
+    Left = 541
+    Top = 16
+    Width = 169
+    Height = 41
+    Caption = 'Qoi(dbyoung)'
+    TabOrder = 3
+    OnClick = btnQoiDBYOUNGClick
   end
 end
