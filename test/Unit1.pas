@@ -4,7 +4,7 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, System.Diagnostics,
-  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.Imaging.pngimage, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Imaging.QOI;
+  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.Imaging.pngimage, Vcl.StdCtrls, Vcl.ExtCtrls;
 
 type
   TForm1 = class(TForm)
@@ -24,7 +24,7 @@ var
 
 implementation
 
-uses uQOI;
+uses uQOI, db.QOI, Vcl.Imaging.QOI;
 
 {$R *.dfm}
 
@@ -169,8 +169,61 @@ begin
 end;
 
 procedure TForm1.btnQoiDBYOUNGClick(Sender: TObject);
+var
+  bmpSrc   : TBitmap;
+  bmpDst   : TBitmap;
+  T1, T2   : Int64;
+  srcBits  : Pointer;
+  pixelsQOI: Pointer;
+  pixelsRGB: PByte;
+  pQoi     : qoi_desc2;
+  pQoi2    : qoi_desc2;
+  outlen   : Integer;
+  Count    : Integer;
 begin
-  //
+  btnQoiDBYOUNG.Enabled := False;
+  bmpSrc                := TBitmap.Create;
+  bmpDst                := TBitmap.Create;
+  try
+    bmpSrc.PixelFormat := pf32bit;
+    bmpSrc.LoadFromFile('..\..\test.bmp');
+    Count := bmpSrc.Width * bmpSrc.Height * 4;
+    GetMem(srcBits, Count);
+    GetBitmapBits(bmpSrc.Handle, Count, srcBits);
+
+    { QOI encode }
+    with TStopwatch.StartNew do
+    begin
+      pQoi.Width      := bmpSrc.Width;
+      pQoi.Height     := bmpSrc.Height;
+      pQoi.channels   := 4;
+      pQoi.colorspace := 0;
+      pixelsQOI       := qoi_encode_pascal(srcBits, @pQoi, outlen);
+      T1              := ElapsedMilliseconds;
+    end;
+    Freemem(srcBits);
+
+    { QOI decode }
+    with TStopwatch.StartNew do
+    begin
+      pixelsRGB := qoi_decode_pascal(pixelsQOI, outlen, pQoi2, 0);
+      T2        := ElapsedMilliseconds;
+    end;
+
+    bmpDst.PixelFormat := pf32bit;
+    bmpDst.Width       := pQoi2.Width;
+    bmpDst.Height      := pQoi2.Height;
+    SetBitmapBits(bmpDst.Handle, bmpDst.Width * bmpDst.Height * 4, pixelsRGB);
+    imgShow.Picture.Bitmap.Assign(bmpDst);
+
+    Freemem(pixelsQOI);
+    Freemem(pixelsRGB);
+  finally
+    bmpSrc.Free;
+    bmpDst.Free;
+    btnQoiDBYOUNG.Enabled := True;
+  end;
+  Caption := Format('Qoi(dbyoung) encode£º%d ms£»decode£º%d ms', [T1, T2]);
 end;
 
 end.

@@ -3,7 +3,7 @@ object Form1: TForm1
   Top = 0
   Caption = 'Test PNG/QOI'
   ClientHeight = 611
-  ClientWidth = 828
+  ClientWidth = 725
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -13,13 +13,13 @@ object Form1: TForm1
   Position = poScreenCenter
   PixelsPerInch = 96
   DesignSize = (
-    828
+    725
     611)
   TextHeight = 15
   object imgShow: TImage
     Left = 16
     Top = 72
-    Width = 797
+    Width = 694
     Height = 531
     Anchors = [akLeft, akTop, akRight, akBottom]
     Stretch = True
