@@ -58,7 +58,7 @@ begin
     { PNG decode }
     with TStopwatch.StartNew do
     begin
-      imgShow.Picture.Assign(png);
+      imgShow.Picture.Bitmap.Assign(png);
       T2 := ElapsedMilliseconds;
     end;
   finally
