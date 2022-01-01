@@ -38,9 +38,12 @@ var
   bmp   : TBitmap;
   T1, T2: Int64;
 begin
-  btnPNG.Enabled := False;
-  png            := TPngImage.Create;
-  bmp            := TBitmap.Create;
+  btnPNG.Enabled  := False;
+  imgShow.Picture := nil;
+  Application.ProcessMessages;
+
+  png := TPngImage.Create;
+  bmp := TBitmap.Create;
   try
     bmp.PixelFormat := pf32bit;
     bmp.LoadFromFile('..\..\test.bmp');
@@ -79,9 +82,12 @@ var
   outlen   : Integer;
   Count    : Integer;
 begin
-  btnQOI.Enabled := False;
-  bmpSrc         := TBitmap.Create;
-  bmpDst         := TBitmap.Create;
+  btnQOI.Enabled  := False;
+  imgShow.Picture := nil;
+  Application.ProcessMessages;
+
+  bmpSrc := TBitmap.Create;
+  bmpDst := TBitmap.Create;
   try
     bmpSrc.PixelFormat := pf32bit;
     bmpSrc.LoadFromFile('..\..\test.bmp');
@@ -131,7 +137,10 @@ var
   mmQoi : TMemoryStream;
 begin
   btnQoiImage.Enabled := False;
-  mmQoi               := TMemoryStream.Create;
+  imgShow.Picture     := nil;
+  Application.ProcessMessages;
+
+  mmQoi := TMemoryStream.Create;
   try
     { QoiImage encode }
     QOI := TQoiImage.Create;
@@ -182,8 +191,11 @@ var
   Count    : Integer;
 begin
   btnQoiDBYOUNG.Enabled := False;
-  bmpSrc                := TBitmap.Create;
-  bmpDst                := TBitmap.Create;
+  imgShow.Picture       := nil;
+  Application.ProcessMessages;
+
+  bmpSrc := TBitmap.Create;
+  bmpDst := TBitmap.Create;
   try
     bmpSrc.PixelFormat := pf32bit;
     bmpSrc.LoadFromFile('..\..\test.bmp');
