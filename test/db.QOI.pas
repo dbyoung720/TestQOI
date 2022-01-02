@@ -22,6 +22,8 @@ function qoi_decode_pascal(const data: Pointer; Size: Integer; var desc: Tqoi_de
 
 implementation
 
+uses System.Threading, System.SyncObjs;
+
 const
   QOI_OP_INDEX                        = $0;
   QOI_OP_DIFF                         = $40;
@@ -51,6 +53,8 @@ type
 
   Tqoi_rgba_t = qoi_rgba_t;
   Pqoi_rgba_t = ^Tqoi_rgba_t;
+
+  TArrQoi_rgba_t = array [0 .. 63] of Tqoi_rgba_t;
 
 function QOI_COLOR_HASH(c: Tqoi_rgba_t): Byte; inline;
 begin
@@ -88,7 +92,7 @@ var
   vr, vg, vb, vg_r, vg_b: Integer;
   index_pos             : Integer;
   src                   : Pqoi_rgba_t;
-  index                 : array [0 .. 63] of Tqoi_rgba_t;
+  index                 : TArrQoi_rgba_t;
   px_prev               : Tqoi_rgba_t;
   bytes                 : PByte;
   intStartPos           : Integer;
@@ -196,7 +200,7 @@ end;
 function qoi_decode_pascal(const data: Pointer; Size: Integer; var desc: Tqoi_desc2; channels: Integer): Pointer;
 var
   run, vg, X, Y: Integer;
-  index        : array [0 .. 63] of Tqoi_rgba_t;
+  index        : TArrQoi_rgba_t;
   px           : Tqoi_rgba_t;
   b1, b2       : Byte;
   bytes        : PByte;
