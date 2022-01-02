@@ -34,7 +34,7 @@ const
   QOI_MASK_2                          = $C0;
   QOI_MAGIC: Cardinal                 = $66696F71;
   QOI_HEADER_SIZE                     = 14;
-  QOI_PIXELS_MAX                      = 400000000;
+  QOI_pixels_MAX                      = 400000000;
   qoi_padding_size                    = 8;
   qoi_padding: array [0 .. 7] of Byte = (0, 0, 0, 0, 0, 0, 0, 1);
 
@@ -88,7 +88,7 @@ end;
 { QOI ENCODE }
 function qoi_encode_pascal(const data: Pointer; const desc: Pqoi_desc2; var out_len: Integer): Pointer;
 var
-  X, Y, max_size, run   : Integer;
+  I, X, Y, max_size, run: Integer;
   vr, vg, vb, vg_r, vg_b: Integer;
   index_pos             : Integer;
   src                   : Pqoi_rgba_t;
@@ -103,7 +103,7 @@ begin
     (desc^.width = 0) or (desc^.height = 0) or         //
     (desc^.channels < 3) or (desc^.channels > 4) or    //
     (desc^.colorspace > 1) or                          //
-    (desc^.height >= QOI_PIXELS_MAX div desc^.width) then
+    (desc^.height >= QOI_pixels_MAX div desc^.width) then
     Exit;
 
   max_size    := desc^.width * desc^.height * desc^.channels + QOI_HEADER_SIZE + qoi_padding_size;
@@ -125,7 +125,7 @@ begin
   begin
     for X := 0 to desc^.width - 1 do
     begin
-      if src.V = px_prev.V then
+      if src^.V = px_prev.V then
       begin
         Inc(run);
         if (run = 62) then
@@ -150,11 +150,11 @@ begin
         else
         begin
           index[index_pos] := src^;
-          if (src.rgba.a = px_prev.rgba.a) then
+          if (src^.rgba.a = px_prev.rgba.a) then
           begin
-            vr   := src.rgba.r - px_prev.rgba.r;
-            vg   := src.rgba.g - px_prev.rgba.g;
-            vb   := src.rgba.b - px_prev.rgba.b;
+            vr   := src^.rgba.r - px_prev.rgba.r;
+            vg   := src^.rgba.g - px_prev.rgba.g;
+            vb   := src^.rgba.b - px_prev.rgba.b;
             vg_r := vr - vg;
             vg_b := vb - vg;
             if ((vr > -3) and (vr < 2) and (vg > -3) and (vg < 2) and (vb > -3) and (vb < 2)) then
@@ -169,15 +169,15 @@ begin
             else
             begin
               qoi_write_8(bytes, QOI_OP_RGB);
-              qoi_write_8(bytes, src.rgba.r);
-              qoi_write_8(bytes, src.rgba.g);
-              qoi_write_8(bytes, src.rgba.b);
+              qoi_write_8(bytes, src^.rgba.r);
+              qoi_write_8(bytes, src^.rgba.g);
+              qoi_write_8(bytes, src^.rgba.b);
             end
           end
           else
           begin
             qoi_write_8(bytes, QOI_OP_RGBA);
-            qoi_write_32(bytes, src.V);
+            qoi_write_32(bytes, src^.V);
           end;
         end;
       end;
@@ -189,8 +189,8 @@ begin
   if (run > 0) then
     qoi_write_8(bytes, QOI_OP_RUN or (run - 1));
 
-  for X := 0 to 7 do
-    qoi_write_8(bytes, qoi_padding[X]);
+  for I := 0 to 7 do
+    qoi_write_8(bytes, qoi_padding[I]);
 
   out_len := Integer(bytes) - intStartPos;
   Result  := PByte(intStartPos);
@@ -204,7 +204,7 @@ var
   px           : Tqoi_rgba_t;
   b1, b2       : Byte;
   bytes        : PByte;
-  pixel        : Pqoi_rgba_t;
+  pixels       : Pqoi_rgba_t;
 begin
   Result := nil;
 
@@ -221,14 +221,14 @@ begin
   if (desc.width = 0) or (desc.height = 0) or     //
     (desc.channels < 3) or (desc.channels > 4) or //
     (desc.colorspace > 1) or                      //
-    (desc.height >= QOI_PIXELS_MAX div desc.width) then
+    (desc.height >= QOI_pixels_MAX div desc.width) then
     Exit;
 
   run := 0;
   FillChar(index, SizeOf(index), 0);
   px.V   := $FF000000;
   Result := AllocMem(desc.width * desc.height * desc.channels);
-  pixel  := Pqoi_rgba_t(Result);
+  pixels := Pqoi_rgba_t(Result);
 
   for Y := 0 to desc.height - 1 do
   begin
@@ -280,8 +280,8 @@ begin
         index[QOI_COLOR_HASH(px)] := px;
       end;
 
-      pixel^.V := px.V;
-      Inc(pixel);
+      pixels^.V := px.V;
+      Inc(pixels);
     end;
   end;
 end;
