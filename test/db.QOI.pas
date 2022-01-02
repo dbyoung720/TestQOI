@@ -73,16 +73,16 @@ begin
   Inc(P);
 end;
 
-function ReadByte(var P: PByte): Byte; inline;
-begin
-  Result := P^;
-  Inc(P);
-end;
-
-function ReadDWORD(var P: PByte): Cardinal; inline;
+function qoi_read_32(var P: PByte): Cardinal; inline;
 begin
   Result := PCardinal(P)^;
   Inc(P, SizeOf(Cardinal));
+end;
+
+function qoi_read_8(var P: PByte): Byte; inline;
+begin
+  Result := P^;
+  Inc(P);
 end;
 
 { QOI ENCODE }
@@ -91,8 +91,8 @@ var
   I, X, Y, max_size, run: Integer;
   vr, vg, vb, vg_r, vg_b: Integer;
   index_pos             : Integer;
-  src                   : Pqoi_rgba_t;
   index                 : TArrQoi_rgba_t;
+  px                    : Pqoi_rgba_t;
   px_prev               : Tqoi_rgba_t;
   bytes                 : PByte;
   intStartPos           : Integer;
@@ -106,7 +106,7 @@ begin
     (desc^.height >= QOI_pixels_MAX div desc^.width) then
     Exit;
 
-  max_size    := desc^.width * desc^.height * desc^.channels + QOI_HEADER_SIZE + qoi_padding_size;
+  max_size    := desc^.width * desc^.height * (desc^.channels + 1) + QOI_HEADER_SIZE + qoi_padding_size;
   bytes       := AllocMem(max_size);
   intStartPos := Integer(bytes);
 
@@ -119,13 +119,13 @@ begin
   run       := 0;
   px_prev.V := $FF000000;
   FillChar(index, SizeOf(index), 0);
-  src := Pqoi_rgba_t(data);
+  px := Pqoi_rgba_t(data);
 
   for Y := 0 to desc^.height - 1 do
   begin
     for X := 0 to desc^.width - 1 do
     begin
-      if src^.V = px_prev.V then
+      if px^.V = px_prev.V then
       begin
         Inc(run);
         if (run = 62) then
@@ -142,19 +142,19 @@ begin
           run := 0;
         end;
 
-        index_pos := QOI_COLOR_HASH(src^);
-        if (index[index_pos].V = src.V) then
+        index_pos := QOI_COLOR_HASH(px^);
+        if (index[index_pos].V = px^.V) then
         begin
           qoi_write_8(bytes, QOI_OP_INDEX or index_pos);
         end
         else
         begin
-          index[index_pos] := src^;
-          if (src^.rgba.a = px_prev.rgba.a) then
+          index[index_pos] := px^;
+          if (px^.rgba.a = px_prev.rgba.a) then
           begin
-            vr   := src^.rgba.r - px_prev.rgba.r;
-            vg   := src^.rgba.g - px_prev.rgba.g;
-            vb   := src^.rgba.b - px_prev.rgba.b;
+            vr   := px^.rgba.r - px_prev.rgba.r;
+            vg   := px^.rgba.g - px_prev.rgba.g;
+            vb   := px^.rgba.b - px_prev.rgba.b;
             vg_r := vr - vg;
             vg_b := vb - vg;
             if ((vr > -3) and (vr < 2) and (vg > -3) and (vg < 2) and (vb > -3) and (vb < 2)) then
@@ -169,20 +169,20 @@ begin
             else
             begin
               qoi_write_8(bytes, QOI_OP_RGB);
-              qoi_write_8(bytes, src^.rgba.r);
-              qoi_write_8(bytes, src^.rgba.g);
-              qoi_write_8(bytes, src^.rgba.b);
+              qoi_write_8(bytes, px^.rgba.r);
+              qoi_write_8(bytes, px^.rgba.g);
+              qoi_write_8(bytes, px^.rgba.b);
             end
           end
           else
           begin
             qoi_write_8(bytes, QOI_OP_RGBA);
-            qoi_write_32(bytes, src^.V);
+            qoi_write_32(bytes, px^.V);
           end;
         end;
       end;
-      px_prev := src^;
-      Inc(src);
+      px_prev := px^;
+      Inc(px);
     end;
   end;
 
@@ -240,19 +240,16 @@ begin
       end
       else
       begin
-        b1 := ReadByte(bytes);
+        b1 := qoi_read_8(bytes);
         if (b1 = QOI_OP_RGB) then
         begin
-          px.rgba.r := ReadByte(bytes);
-          px.rgba.g := ReadByte(bytes);
-          px.rgba.b := ReadByte(bytes);
+          px.rgba.r := qoi_read_8(bytes);
+          px.rgba.g := qoi_read_8(bytes);
+          px.rgba.b := qoi_read_8(bytes);
         end
         else if (b1 = QOI_OP_RGBA) then
         begin
-          px.rgba.r := ReadByte(bytes);
-          px.rgba.g := ReadByte(bytes);
-          px.rgba.b := ReadByte(bytes);
-          px.rgba.a := ReadByte(bytes);
+          px.V := qoi_read_32(bytes);
         end
         else if ((b1 and QOI_MASK_2) = QOI_OP_INDEX) then
         begin
@@ -266,7 +263,7 @@ begin
         end
         else if (b1 and QOI_MASK_2) = QOI_OP_LUMA then
         begin
-          b2        := ReadByte(bytes);
+          b2        := qoi_read_8(bytes);
           vg        := (b1 and $3F) - 32;
           px.rgba.r := px.rgba.r + vg - 8 + ((b2 shr 4) and $F);
           px.rgba.g := px.rgba.g + vg;

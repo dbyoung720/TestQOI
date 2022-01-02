@@ -45,8 +45,8 @@ begin
   png := TPngImage.Create;
   bmp := TBitmap.Create;
   try
-    bmp.PixelFormat := pf32bit;
     bmp.LoadFromFile('..\..\test.bmp');
+    bmp.PixelFormat := pf32bit;
 
     { PNG encode }
     with TStopwatch.StartNew do
@@ -89,8 +89,8 @@ begin
   bmpSrc := TBitmap.Create;
   bmpDst := TBitmap.Create;
   try
-    bmpSrc.PixelFormat := pf32bit;
     bmpSrc.LoadFromFile('..\..\test.bmp');
+    bmpSrc.PixelFormat := pf32bit;
     Count := bmpSrc.Width * bmpSrc.Height * 4;
     GetMem(srcBits, Count);
     GetBitmapBits(bmpSrc.Handle, Count, srcBits);
@@ -197,8 +197,8 @@ begin
   bmpSrc := TBitmap.Create;
   bmpDst := TBitmap.Create;
   try
-    bmpSrc.PixelFormat := pf32bit;
     bmpSrc.LoadFromFile('..\..\test.bmp');
+    bmpSrc.PixelFormat := pf32bit;
     Count := bmpSrc.Width * bmpSrc.Height * 4;
     GetMem(srcBits, Count);
     GetBitmapBits(bmpSrc.Handle, Count, srcBits);
