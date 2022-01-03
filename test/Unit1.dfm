@@ -49,7 +49,7 @@ object Form1: TForm1
     Top = 16
     Width = 169
     Height = 41
-    Caption = 'QoiImage'
+    Caption = 'TQoiImage'
     TabOrder = 2
     OnClick = btnQoiImageClick
   end
