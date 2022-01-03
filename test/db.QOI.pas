@@ -289,6 +289,7 @@ var
   bytes        : PByte;
   StartScanLine: Integer;
   bmpWidthBytes: Integer;
+  width, height: Integer;
 begin
   Result := nil;
 
@@ -310,13 +311,16 @@ begin
 
   px.V          := $FF000000;
   Result        := AllocMem(desc.width * desc.height * desc.channels);
+
+  width         := desc.width;
+  height        := desc.height;
   StartScanLine := Integer(Result);
   bmpWidthBytes := desc.width * desc.channels;
 
-  for Y := 0 to desc.height - 1 do
+  for Y := 0 to height - 1 do
   begin
     pixels := Pqoi_rgba_t(StartScanLine + Y * bmpWidthBytes);
-    for X  := 0 to desc.width - 1 do
+    for X  := 0 to width - 1 do
     begin
       qoi_decode_pascal_parallel(bytes, px);
 
