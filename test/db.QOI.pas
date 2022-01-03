@@ -85,17 +85,96 @@ begin
   Inc(P);
 end;
 
+procedure qoi_encode_pascal_parallel(var bytes: PByte; const px: Pqoi_rgba_t); inline;
+{$J+}
+const
+  run: Integer          = 0;
+  index: TArrQoi_rgba_t = (                                         //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0)  //
+    );
+  px_prev: Tqoi_rgba_t = (V: $FF000000);
+{$J-}
+var
+  vr, vg, vb, vg_r, vg_b: Integer;
+  index_pos             : Integer;
+begin
+  if px^.V = px_prev.V then
+  begin
+    Inc(run);
+    if (run = 62) then
+    begin
+      qoi_write_8(bytes, QOI_OP_RUN or (run - 1));
+      run := 0;
+    end;
+  end
+  else
+  begin
+    if (run > 0) then
+    begin
+      qoi_write_8(bytes, QOI_OP_RUN or (run - 1));
+      run := 0;
+    end;
+
+    index_pos := QOI_COLOR_HASH(px^);
+    if (index[index_pos].V = px^.V) then
+    begin
+      qoi_write_8(bytes, QOI_OP_INDEX or index_pos);
+    end
+    else
+    begin
+      index[index_pos] := px^;
+      if (px^.rgba.a = px_prev.rgba.a) then
+      begin
+        vr   := px^.rgba.r - px_prev.rgba.r;
+        vg   := px^.rgba.g - px_prev.rgba.g;
+        vb   := px^.rgba.b - px_prev.rgba.b;
+        vg_r := vr - vg;
+        vg_b := vb - vg;
+        if ((vr > -3) and (vr < 2) and (vg > -3) and (vg < 2) and (vb > -3) and (vb < 2)) then
+        begin
+          qoi_write_8(bytes, QOI_OP_DIFF or (vr + 2) shl 4 or (vg + 2) shl 2 or (vb + 2));
+        end
+        else if ((vg_r > -9) and (vg_r < 8) and (vg > -33) and (vg < 32) and (vg_b > -9) and (vg_b < 8)) then
+        begin
+          qoi_write_8(bytes, QOI_OP_LUMA or (vg + 32));
+          qoi_write_8(bytes, (vg_r + 8) shl 4 or (vg_b + 8));
+        end
+        else
+        begin
+          qoi_write_8(bytes, QOI_OP_RGB);
+          qoi_write_8(bytes, px^.rgba.r);
+          qoi_write_8(bytes, px^.rgba.g);
+          qoi_write_8(bytes, px^.rgba.b);
+        end
+      end
+      else
+      begin
+        qoi_write_8(bytes, QOI_OP_RGBA);
+        qoi_write_32(bytes, px^.V);
+      end;
+    end;
+  end;
+  px_prev := px^;
+end;
+
 { QOI ENCODE }
 function qoi_encode_pascal(const data: Pointer; const desc: Pqoi_desc2; var out_len: Integer): Pointer;
 var
-  I, X, Y, max_size, run: Integer;
-  vr, vg, vb, vg_r, vg_b: Integer;
-  index_pos             : Integer;
-  index                 : TArrQoi_rgba_t;
-  px                    : Pqoi_rgba_t;
-  px_prev               : Tqoi_rgba_t;
-  bytes                 : PByte;
-  intStartPos           : Integer;
+  I, max_size  : Integer;
+  intStartPos  : Integer;
+  StartScanLine: Integer;
+  bmpWidthBytes: Integer;
+  width, height: Integer;
+  bytes        : PByte;
+  px           : Pqoi_rgba_t;
+  X, Y         : Integer;
 begin
   Result := nil;
 
@@ -116,78 +195,23 @@ begin
   qoi_write_8(bytes, desc^.channels);
   qoi_write_8(bytes, 0);
 
-  run       := 0;
-  px_prev.V := $FF000000;
-  FillChar(index, SizeOf(index), 0);
-  px := Pqoi_rgba_t(data);
+  width         := desc^.width;
+  height        := desc^.height;
+  StartScanLine := Integer(data);
+  bmpWidthBytes := desc^.width * desc^.channels;
 
-  for Y := 0 to desc^.height - 1 do
+  for Y := 0 to height - 1 do
   begin
-    for X := 0 to desc^.width - 1 do
+    px    := Pqoi_rgba_t(StartScanLine + Y * bmpWidthBytes);
+    for X := 0 to width - 1 do
     begin
-      if px^.V = px_prev.V then
-      begin
-        Inc(run);
-        if (run = 62) then
-        begin
-          qoi_write_8(bytes, QOI_OP_RUN or (run - 1));
-          run := 0;
-        end;
-      end
-      else
-      begin
-        if (run > 0) then
-        begin
-          qoi_write_8(bytes, QOI_OP_RUN or (run - 1));
-          run := 0;
-        end;
-
-        index_pos := QOI_COLOR_HASH(px^);
-        if (index[index_pos].V = px^.V) then
-        begin
-          qoi_write_8(bytes, QOI_OP_INDEX or index_pos);
-        end
-        else
-        begin
-          index[index_pos] := px^;
-          if (px^.rgba.a = px_prev.rgba.a) then
-          begin
-            vr   := px^.rgba.r - px_prev.rgba.r;
-            vg   := px^.rgba.g - px_prev.rgba.g;
-            vb   := px^.rgba.b - px_prev.rgba.b;
-            vg_r := vr - vg;
-            vg_b := vb - vg;
-            if ((vr > -3) and (vr < 2) and (vg > -3) and (vg < 2) and (vb > -3) and (vb < 2)) then
-            begin
-              qoi_write_8(bytes, QOI_OP_DIFF or (vr + 2) shl 4 or (vg + 2) shl 2 or (vb + 2));
-            end
-            else if ((vg_r > -9) and (vg_r < 8) and (vg > -33) and (vg < 32) and (vg_b > -9) and (vg_b < 8)) then
-            begin
-              qoi_write_8(bytes, QOI_OP_LUMA or (vg + 32));
-              qoi_write_8(bytes, (vg_r + 8) shl 4 or (vg_b + 8));
-            end
-            else
-            begin
-              qoi_write_8(bytes, QOI_OP_RGB);
-              qoi_write_8(bytes, px^.rgba.r);
-              qoi_write_8(bytes, px^.rgba.g);
-              qoi_write_8(bytes, px^.rgba.b);
-            end
-          end
-          else
-          begin
-            qoi_write_8(bytes, QOI_OP_RGBA);
-            qoi_write_32(bytes, px^.V);
-          end;
-        end;
-      end;
-      px_prev := px^;
+      qoi_encode_pascal_parallel(bytes, px);
       Inc(px);
     end;
   end;
 
-  if (run > 0) then
-    qoi_write_8(bytes, QOI_OP_RUN or (run - 1));
+  // if (run > 0) then
+  // qoi_write_8(bytes, QOI_OP_RUN or (run - 1));
 
   for I := 0 to 7 do
     qoi_write_8(bytes, qoi_padding[I]);
@@ -196,15 +220,78 @@ begin
   Result  := PByte(intStartPos);
 end;
 
+procedure qoi_decode_pascal_parallel(var bytes: PByte; var px: Tqoi_rgba_t); inline;
+{$J+}
+const
+  run: Integer          = 0;
+  index: TArrQoi_rgba_t = (                                         //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
+    (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0)  //
+    );
+{$J-}
+var
+  b1, b2: Byte;
+  vg    : Integer;
+begin
+  if (run > 0) then
+  begin
+    Dec(run);
+  end
+  else
+  begin
+    b1 := qoi_read_8(bytes);
+    if (b1 = QOI_OP_RGB) then
+    begin
+      px.rgba.r := qoi_read_8(bytes);
+      px.rgba.g := qoi_read_8(bytes);
+      px.rgba.b := qoi_read_8(bytes);
+    end
+    else if (b1 = QOI_OP_RGBA) then
+    begin
+      px.V := qoi_read_32(bytes);
+    end
+    else if ((b1 and QOI_MASK_2) = QOI_OP_INDEX) then
+    begin
+      px := index[b1];
+    end
+    else if (b1 and QOI_MASK_2) = QOI_OP_DIFF then
+    begin
+      px.rgba.r := px.rgba.r + ((b1 shr 4) and 3) - 2;
+      px.rgba.g := px.rgba.g + ((b1 shr 2) and 3) - 2;
+      px.rgba.b := px.rgba.b + (b1 and 3) - 2;
+    end
+    else if (b1 and QOI_MASK_2) = QOI_OP_LUMA then
+    begin
+      b2        := qoi_read_8(bytes);
+      vg        := (b1 and $3F) - 32;
+      px.rgba.r := px.rgba.r + vg - 8 + ((b2 shr 4) and $F);
+      px.rgba.g := px.rgba.g + vg;
+      px.rgba.b := px.rgba.b + vg - 8 + (b2 and $F);
+    end
+    else if (b1 and QOI_MASK_2) = QOI_OP_RUN then
+    begin
+      run := (b1 and $3F);
+    end;
+
+    index[QOI_COLOR_HASH(px)] := px;
+  end;
+end;
+
 { QOI DECODE }
 function qoi_decode_pascal(const data: Pointer; Size: Integer; var desc: Tqoi_desc2; channels: Integer): Pointer;
 var
-  run, vg, X, Y: Integer;
-  index        : TArrQoi_rgba_t;
+  X, Y         : Integer;
   px           : Tqoi_rgba_t;
-  b1, b2       : Byte;
-  bytes        : PByte;
   pixels       : Pqoi_rgba_t;
+  bytes        : PByte;
+  StartScanLine: Integer;
+  bmpWidthBytes: Integer;
 begin
   Result := nil;
 
@@ -224,58 +311,17 @@ begin
     (desc.height >= QOI_pixels_MAX div desc.width) then
     Exit;
 
-  run := 0;
-  FillChar(index, SizeOf(index), 0);
-  px.V   := $FF000000;
-  Result := AllocMem(desc.width * desc.height * desc.channels);
-  pixels := Pqoi_rgba_t(Result);
+  px.V          := $FF000000;
+  Result        := AllocMem(desc.width * desc.height * desc.channels);
+  StartScanLine := Integer(Result);
+  bmpWidthBytes := desc.width * desc.channels;
 
   for Y := 0 to desc.height - 1 do
   begin
-    for X := 0 to desc.width - 1 do
+    pixels := Pqoi_rgba_t(StartScanLine + Y * bmpWidthBytes);
+    for X  := 0 to desc.width - 1 do
     begin
-      if (run > 0) then
-      begin
-        Dec(run);
-      end
-      else
-      begin
-        b1 := qoi_read_8(bytes);
-        if (b1 = QOI_OP_RGB) then
-        begin
-          px.rgba.r := qoi_read_8(bytes);
-          px.rgba.g := qoi_read_8(bytes);
-          px.rgba.b := qoi_read_8(bytes);
-        end
-        else if (b1 = QOI_OP_RGBA) then
-        begin
-          px.V := qoi_read_32(bytes);
-        end
-        else if ((b1 and QOI_MASK_2) = QOI_OP_INDEX) then
-        begin
-          px := index[b1];
-        end
-        else if (b1 and QOI_MASK_2) = QOI_OP_DIFF then
-        begin
-          px.rgba.r := px.rgba.r + ((b1 shr 4) and 3) - 2;
-          px.rgba.g := px.rgba.g + ((b1 shr 2) and 3) - 2;
-          px.rgba.b := px.rgba.b + (b1 and 3) - 2;
-        end
-        else if (b1 and QOI_MASK_2) = QOI_OP_LUMA then
-        begin
-          b2        := qoi_read_8(bytes);
-          vg        := (b1 and $3F) - 32;
-          px.rgba.r := px.rgba.r + vg - 8 + ((b2 shr 4) and $F);
-          px.rgba.g := px.rgba.g + vg;
-          px.rgba.b := px.rgba.b + vg - 8 + (b2 and $F);
-        end
-        else if (b1 and QOI_MASK_2) = QOI_OP_RUN then
-        begin
-          run := (b1 and $3F);
-        end;
-
-        index[QOI_COLOR_HASH(px)] := px;
-      end;
+      qoi_decode_pascal_parallel(bytes, px);
 
       pixels^.V := px.V;
       Inc(pixels);
