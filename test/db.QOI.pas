@@ -210,9 +210,6 @@ begin
     end;
   end;
 
-  // if (run > 0) then
-  // qoi_write_8(bytes, QOI_OP_RUN or (run - 1));
-
   for I := 0 to 7 do
     qoi_write_8(bytes, qoi_padding[I]);
 
