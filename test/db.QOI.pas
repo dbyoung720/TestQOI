@@ -337,7 +337,6 @@ end;
 { QOI DECODE }
 function qoi_decode_pascal(const data: Pointer; Size: Integer; var desc: Tqoi_desc2; channels: Integer): Pointer;
 var
-  px           : Tqoi_rgba_t;
   bytes        : PByte;
   StartScanLine: Integer;
   bmpWidthBytes: Integer;
@@ -363,7 +362,6 @@ begin
     (desc.height >= QOI_pixels_MAX div desc.width) then
     Exit;
 
-  px.V   := $FF000000;
   Result := AllocMem(desc.width * desc.height * desc.channels);
 
   width         := desc.width;
