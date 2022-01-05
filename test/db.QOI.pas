@@ -101,7 +101,7 @@ begin
   Inc(P);
 end;
 
-function qoi_encode_pascal_parallel(const bytes: PByte; const px: Pqoi_rgba_t): TSixByteArray; inline;
+function qoi_encode_pascal_parallel(const px: Pqoi_rgba_t): TSixByteArray; inline;
 {$J+}
 const
   run: Integer          = 0;
@@ -247,7 +247,7 @@ begin
     px    := Pqoi_rgba_t(StartScanLine + Y * bmpWidthBytes);
     for X := 0 to width - 1 do
     begin
-      tmpArr   := qoi_encode_pascal_parallel(bytes, px);
+      tmpArr   := qoi_encode_pascal_parallel(px);
       intCount := tmpArr[5];
       if intCount > 0 then
       begin
