@@ -84,9 +84,6 @@ procedure qoi_write_arr(const P: PByte; const val: TFiveByteArray; const Count: 
 var
   tmpArr: TThreeByteArray;
 begin
-  if Count = 0 then
-    Exit;
-
   if Count = 1 then
     qoi_write_8(P, val[0])
   else if Count = 2 then
