@@ -51,12 +51,14 @@ type
         (V: Cardinal);
   end;
 
-  Tqoi_rgba_t    = qoi_rgba_t;
-  Pqoi_rgba_t    = ^Tqoi_rgba_t;
-  PFiveByteArray = ^TFiveByteArray;
+  Tqoi_rgba_t     = qoi_rgba_t;
+  Pqoi_rgba_t     = ^Tqoi_rgba_t;
+  PFiveByteArray  = ^TFiveByteArray;
+  PThreeByteArray = ^TThreeByteArray;
 
-  TArrQoi_rgba_t = array [0 .. 63] of Tqoi_rgba_t;
-  TFiveByteArray = array [0 .. 4] of Byte;
+  TArrQoi_rgba_t  = array [0 .. 63] of Tqoi_rgba_t;
+  TFiveByteArray  = array [0 .. 4] of Byte;
+  TThreeByteArray = array [0 .. 2] of Byte;
 
 function QOI_COLOR_HASH(c: Tqoi_rgba_t): Byte; inline;
 begin
@@ -79,9 +81,6 @@ begin
 end;
 
 procedure qoi_write_arr(const P: PByte; const val: TFiveByteArray; const Count: Integer); inline;
-type
-  TThreeByteArray = array [0 .. 2] of Byte;
-  PThreeByteArray = ^TThreeByteArray;
 var
   tmpArr: TThreeByteArray;
 begin
