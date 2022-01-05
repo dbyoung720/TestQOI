@@ -51,14 +51,11 @@ type
         (V: Cardinal);
   end;
 
-  Tqoi_rgba_t     = qoi_rgba_t;
-  Pqoi_rgba_t     = ^Tqoi_rgba_t;
-  PFiveByteArray  = ^TFiveByteArray;
-  PThreeByteArray = ^TThreeByteArray;
+  Tqoi_rgba_t = qoi_rgba_t;
+  Pqoi_rgba_t = ^Tqoi_rgba_t;
 
-  TArrQoi_rgba_t  = array [0 .. 63] of Tqoi_rgba_t;
-  TFiveByteArray  = array [0 .. 4] of Byte;
-  TThreeByteArray = array [0 .. 2] of Byte;
+  TArrQoi_rgba_t = array [0 .. 63] of Tqoi_rgba_t;
+  TSixByteArray  = array [0 .. 5] of Byte;
 
 function QOI_COLOR_HASH(c: Tqoi_rgba_t): Byte; inline;
 begin
@@ -80,23 +77,16 @@ begin
   P^ := val;
 end;
 
-procedure qoi_write_arr(const P: PByte; const val: TFiveByteArray; const Count: Integer); inline;
-var
-  tmpArr: TThreeByteArray;
+procedure qoi_write_arr(const P: PByte; const val: TSixByteArray; const Count: Integer); inline;
 begin
   if Count = 1 then
     qoi_write_8(P, val[0])
   else if Count = 2 then
     qoi_write_16(P, PWORD(@val)^)
-  else if Count = 3 then
-  begin
-    Move(val[0], tmpArr[0], Count);
-    PThreeByteArray(P)^ := tmpArr;
-  end
   else if Count = 4 then
     qoi_write_32(P, PCardinal(@val)^)
   else
-    PFiveByteArray(P)^ := val;
+    Move(val[0], P^, Count);
 end;
 
 function qoi_read_32(var P: PByte): Cardinal; inline;
@@ -111,7 +101,7 @@ begin
   Inc(P);
 end;
 
-function qoi_encode_pascal_parallel(const bytes: PByte; const px: Pqoi_rgba_t; var tmpArr: TFiveByteArray): Integer; inline;
+function qoi_encode_pascal_parallel(const bytes: PByte; const px: Pqoi_rgba_t): TSixByteArray; inline;
 {$J+}
 const
   run: Integer          = 0;
@@ -130,16 +120,17 @@ const
 var
   vr, vg, vb, vg_r, vg_b: Integer;
   index_pos             : Integer;
+  Count                 : Integer;
 begin
-  Result := 0;
+  Count := 0;
 
   if px^.V = px_prev.V then
   begin
     Inc(run);
     if (run = 62) then
     begin
-      tmpArr[Result] := QOI_OP_RUN or (run - 1);
-      Inc(Result);
+      Result[Count] := QOI_OP_RUN or (run - 1);
+      Inc(Count);
       run := 0;
     end;
   end
@@ -147,16 +138,16 @@ begin
   begin
     if (run > 0) then
     begin
-      tmpArr[Result] := QOI_OP_RUN or (run - 1);
-      Inc(Result);
+      Result[Count] := QOI_OP_RUN or (run - 1);
+      Inc(Count);
       run := 0;
     end;
 
     index_pos := QOI_COLOR_HASH(px^);
     if (index[index_pos].V = px^.V) then
     begin
-      tmpArr[Result] := QOI_OP_INDEX or index_pos;
-      Inc(Result);
+      Result[Count] := QOI_OP_INDEX or index_pos;
+      Inc(Count);
     end
     else
     begin
@@ -170,37 +161,38 @@ begin
         vg_b := vb - vg;
         if ((vr > -3) and (vr < 2) and (vg > -3) and (vg < 2) and (vb > -3) and (vb < 2)) then
         begin
-          tmpArr[Result] := QOI_OP_DIFF or (vr + 2) shl 4 or (vg + 2) shl 2 or (vb + 2);
-          Inc(Result);
+          Result[Count] := QOI_OP_DIFF or (vr + 2) shl 4 or (vg + 2) shl 2 or (vb + 2);
+          Inc(Count);
         end
         else if ((vg_r > -9) and (vg_r < 8) and (vg > -33) and (vg < 32) and (vg_b > -9) and (vg_b < 8)) then
         begin
-          tmpArr[Result + 0] := QOI_OP_LUMA or (vg + 32);
-          tmpArr[Result + 1] := (vg_r + 8) shl 4 or (vg_b + 8);
-          Inc(Result, 2);
+          Result[Count + 0] := QOI_OP_LUMA or (vg + 32);
+          Result[Count + 1] := (vg_r + 8) shl 4 or (vg_b + 8);
+          Inc(Count, 2);
         end
         else
         begin
-          tmpArr[Result + 0] := QOI_OP_RGB;
-          tmpArr[Result + 1] := px^.rgba.r;
-          tmpArr[Result + 2] := px^.rgba.g;
-          tmpArr[Result + 3] := px^.rgba.b;
-          Inc(Result, 4);
+          Result[Count + 0] := QOI_OP_RGB;
+          Result[Count + 1] := px^.rgba.r;
+          Result[Count + 2] := px^.rgba.g;
+          Result[Count + 3] := px^.rgba.b;
+          Inc(Count, 4);
         end
       end
       else
       begin
-        tmpArr[Result + 0] := QOI_OP_RGBA;
-        tmpArr[Result + 1] := px^.rgba.r;
-        tmpArr[Result + 2] := px^.rgba.g;
-        tmpArr[Result + 3] := px^.rgba.b;
-        tmpArr[Result + 4] := px^.rgba.a;
-        Inc(Result, 5);
+        Result[Count + 0] := QOI_OP_RGBA;
+        Result[Count + 1] := px^.rgba.r;
+        Result[Count + 2] := px^.rgba.g;
+        Result[Count + 3] := px^.rgba.b;
+        Result[Count + 4] := px^.rgba.a;
+        Inc(Count, 5);
       end;
     end;
   end;
 
-  px_prev := px^;
+  Result[5] := Count;
+  px_prev   := px^;
 end;
 
 { QOI ENCODE }
@@ -214,7 +206,7 @@ var
   bytes        : PByte;
   px           : Pqoi_rgba_t;
   X, Y         : Integer;
-  tmpArr       : TFiveByteArray;
+  tmpArr       : TSixByteArray;
   intCount     : Integer;
 begin
   Result := nil;
@@ -255,7 +247,8 @@ begin
     px    := Pqoi_rgba_t(StartScanLine + Y * bmpWidthBytes);
     for X := 0 to width - 1 do
     begin
-      intCount := qoi_encode_pascal_parallel(bytes, px, tmpArr);
+      tmpArr   := qoi_encode_pascal_parallel(bytes, px);
+      intCount := tmpArr[5];
       if intCount > 0 then
       begin
         qoi_write_arr(bytes, tmpArr, intCount);
