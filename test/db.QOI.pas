@@ -79,6 +79,11 @@ begin
 end;
 
 procedure qoi_write_arr(const P: PByte; const val: TFiveByteArray; const Count: Integer); inline;
+type
+  TThreeByteArray = array [0 .. 2] of Byte;
+  PThreeByteArray = ^TThreeByteArray;
+var
+  tmpArr: TThreeByteArray;
 begin
   if Count = 0 then
     Exit;
@@ -87,6 +92,11 @@ begin
     qoi_write_8(P, val[0])
   else if Count = 2 then
     qoi_write_16(P, PWORD(@val)^)
+  else if Count = 3 then
+  begin
+    Move(val[0], tmpArr[0], Count);
+    PThreeByteArray(P)^ := tmpArr;
+  end
   else if Count = 4 then
     qoi_write_32(P, PCardinal(@val)^)
   else
