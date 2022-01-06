@@ -45,7 +45,7 @@ begin
   png := TPngImage.Create;
   bmp := TBitmap.Create;
   try
-    bmp.LoadFromFile('..\..\test.bmp');
+    bmp.LoadFromFile('..\..\4K.bmp');
     bmp.PixelFormat := pf32bit;
 
     { PNG encode }
@@ -89,7 +89,7 @@ begin
   bmpSrc := TBitmap.Create;
   bmpDst := TBitmap.Create;
   try
-    bmpSrc.LoadFromFile('..\..\test.bmp');
+    bmpSrc.LoadFromFile('..\..\4K.bmp');
     bmpSrc.PixelFormat := pf32bit;
     Count := bmpSrc.Width * bmpSrc.Height * 4;
     GetMem(srcBits, Count);
@@ -145,7 +145,7 @@ begin
     { QoiImage encode }
     QOI := TQoiImage.Create;
     try
-      QOI.LoadFromFile('..\..\test.bmp');
+      QOI.LoadFromFile('..\..\4K.bmp');
 
       with TStopwatch.StartNew do
       begin
@@ -197,7 +197,7 @@ begin
   bmpSrc := TBitmap.Create;
   bmpDst := TBitmap.Create;
   try
-    bmpSrc.LoadFromFile('..\..\test.bmp');
+    bmpSrc.LoadFromFile('..\..\4K.bmp');
     bmpSrc.PixelFormat := pf32bit;
     Count := bmpSrc.Width * bmpSrc.Height * 4;
     GetMem(srcBits, Count);
