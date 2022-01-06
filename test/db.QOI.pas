@@ -89,18 +89,6 @@ begin
     Move(val[0], P^, Count);
 end;
 
-function qoi_read_32(var P: PByte): Cardinal; inline;
-begin
-  Result := PCardinal(P)^;
-  Inc(P, SizeOf(Cardinal));
-end;
-
-function qoi_read_8(var P: PByte): Byte; inline;
-begin
-  Result := P^;
-  Inc(P);
-end;
-
 function qoi_encode_pascal_parallel(const px: Pqoi_rgba_t): TSixByteArray; inline;
 {$J+}
 const
@@ -267,7 +255,7 @@ begin
   Result  := PByte(intStartPos);
 end;
 
-function qoi_decode_pascal_parallel(var bytes: PByte): Cardinal; inline;
+function qoi_decode_pascal_parallel(const bytes: PByte; const intPos: Integer; var Count: Integer): Cardinal; inline;
 {$J+}
 const
   run: Integer          = 0;
@@ -287,22 +275,36 @@ var
   b1, b2: Byte;
   vg    : Integer;
 begin
+  Count := 0;
+
   if (run > 0) then
   begin
     Dec(run);
   end
   else
   begin
-    b1 := qoi_read_8(bytes);
+    b1 := bytes[intPos + Count];
+    Inc(Count);
+
     if (b1 = QOI_OP_RGB) then
     begin
-      px.rgba.r := qoi_read_8(bytes);
-      px.rgba.g := qoi_read_8(bytes);
-      px.rgba.b := qoi_read_8(bytes);
+      px.rgba.r := bytes[intPos + Count];
+      Inc(Count);
+      px.rgba.g := bytes[intPos + Count];
+      Inc(Count);
+      px.rgba.b := bytes[intPos + Count];
+      Inc(Count);
     end
     else if (b1 = QOI_OP_RGBA) then
     begin
-      px.V := qoi_read_32(bytes);
+      px.rgba.r := bytes[intPos + Count];
+      Inc(Count);
+      px.rgba.g := bytes[intPos + Count];
+      Inc(Count);
+      px.rgba.b := bytes[intPos + Count];
+      Inc(Count);
+      px.rgba.a := bytes[intPos + Count];
+      Inc(Count);
     end
     else if ((b1 and QOI_MASK_2) = QOI_OP_INDEX) then
     begin
@@ -316,7 +318,8 @@ begin
     end
     else if (b1 and QOI_MASK_2) = QOI_OP_LUMA then
     begin
-      b2        := qoi_read_8(bytes);
+      b2 := bytes[intPos + Count];
+      Inc(Count);
       vg        := (b1 and $3F) - 32;
       px.rgba.r := px.rgba.r + vg - 8 + ((b2 shr 4) and $F);
       px.rgba.g := px.rgba.g + vg;
@@ -342,6 +345,8 @@ var
   width, height: Integer;
   X, Y         : Integer;
   pixels       : Pqoi_rgba_t;
+  intPos       : Integer;
+  Count        : Integer;
 begin
   Result := nil;
 
@@ -353,7 +358,6 @@ begin
   bytes := data;
 
   Move(bytes^, desc, SizeOf(Tqoi_desc2));
-  Inc(bytes, SizeOf(Tqoi_desc2));
 
   if (desc.width = 0) or (desc.height = 0) or     //
     (desc.channels < 3) or (desc.channels > 4) or //
@@ -367,13 +371,16 @@ begin
   height        := desc.height;
   StartScanLine := Integer(Result);
   bmpWidthBytes := desc.width * desc.channels;
+  intPos        := 14;
 
   for Y := 0 to height - 1 do
   begin
     pixels := Pqoi_rgba_t(StartScanLine + Y * bmpWidthBytes);
     for X  := 0 to width - 1 do
     begin
-      pixels^.V := qoi_decode_pascal_parallel(bytes);
+      pixels^.V := qoi_decode_pascal_parallel(bytes, intPos, Count);
+      Inc(intPos, Count);
+
       Inc(pixels);
     end;
   end;
