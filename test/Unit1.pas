@@ -80,7 +80,6 @@ var
   pQoi     : qoi_desc;
   pQoi_db  : qoi_desc;
   outlen   : Integer;
-  Count    : Integer;
 begin
   btnQOI.Enabled  := False;
   imgShow.Picture := nil;
@@ -91,9 +90,7 @@ begin
   try
     bmpSrc.LoadFromFile('..\..\4K.bmp');
     bmpSrc.PixelFormat := pf32bit;
-    Count              := bmpSrc.Width * bmpSrc.Height * 4;
-    GetMem(srcBits, Count);
-    GetBitmapBits(bmpSrc.Handle, Count, srcBits);
+    srcBits            := TBitmapImageAccess(TBMPAccess(bmpSrc).FImage).FDIB.dsBm.bmBits;
 
     { QOI encode }
     with TStopwatch.StartNew do
@@ -105,7 +102,6 @@ begin
       pixelsQOI       := qoi_encode(srcBits, @pQoi, outlen);
       T1              := ElapsedMilliseconds;
     end;
-    Freemem(srcBits);
 
     { QOI decode }
     with TStopwatch.StartNew do
@@ -117,7 +113,7 @@ begin
     bmpDst.PixelFormat := pf32bit;
     bmpDst.Width       := pQoi_db.Width;
     bmpDst.Height      := pQoi_db.Height;
-    SetBitmapBits(bmpDst.Handle, bmpDst.Width * bmpDst.Height * 4, pixelsRGB);
+    Move(pixelsRGB^, TBitmapImageAccess(TBMPAccess(bmpDst).FImage).FDIB.dsBm.bmBits^, bmpDst.Width * bmpDst.Height * 4);
     imgShow.Picture.Bitmap.Assign(bmpDst);
 
     Freemem(pixelsQOI);
@@ -198,9 +194,7 @@ begin
   try
     bmpSrc.LoadFromFile('..\..\4K.bmp');
     bmpSrc.PixelFormat := pf32bit;
-    Count              := bmpSrc.Width * bmpSrc.Height * 4;
-    GetMem(srcBits, Count);
-    GetBitmapBits(bmpSrc.Handle, Count, srcBits);
+    srcBits            := TBitmapImageAccess(TBMPAccess(bmpSrc).FImage).FDIB.dsBm.bmBits;
 
     { QOI encode }
     with TStopwatch.StartNew do
@@ -212,7 +206,6 @@ begin
       pixelsQOI       := qoi_encode_pascal(srcBits, hQOI, outlen);
       T1              := ElapsedMilliseconds;
     end;
-    Freemem(srcBits);
 
     { QOI decode }
     with TStopwatch.StartNew do

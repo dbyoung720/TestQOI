@@ -19,7 +19,7 @@ type
 
   PQOIHeader = ^TQOIHeader;
 
-{ QOI ENCODE }
+  { QOI ENCODE }
 function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer): Pointer;
 
 { QOI DECODE }
@@ -368,7 +368,7 @@ begin
   Result        := AllocMem(Count);
   StartScanLine := Integer(Result);
 
-  for Y := Height - 1 downto 0 do
+  for Y := 0 to Height - 1 do
   begin
     pixels := PQOI_RGBA_T(StartScanLine + Y * bmpWidthBytes);
     for X  := 0 to Width - 1 do
