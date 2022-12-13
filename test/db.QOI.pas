@@ -351,12 +351,13 @@ begin
   Result := nil;
   Count  := 0;
 
-  if (Buffer = nil) or (@desc = nil) or ((Channels <> 0) and (Channels <> 3) and (Channels <> 4)) or (BufferSize < SizeOf(TQOIHeader) + SizeOf(qoi_padding)) then
+  // Only Support 24bit¡¢32bit
+  if (Buffer = nil) or ((Channels <> 0) and (Channels <> 3) and (Channels <> 4)) or (BufferSize < SizeOf(TQOIHeader) + SizeOf(qoi_padding)) then
     Exit;
 
+  // Check qoi header
   bytes := Buffer;
   Move(bytes^, desc, SizeOf(TQOIHeader));
-
   if (desc.Width = 0) or (desc.Height = 0) or (desc.Channels < 3) or (desc.Channels > 4) or (desc.Colorspace > 1) or (desc.Height >= QOI_pixels_MAX div desc.Width) then
     Exit;
 
@@ -368,6 +369,7 @@ begin
   Result        := AllocMem(Count);
   StartScanLine := Integer(Result);
 
+  // start qoi decode
   for Y := 0 to Height - 1 do
   begin
     pixels := PQOI_RGBA_T(StartScanLine + Y * bmpWidthBytes);
