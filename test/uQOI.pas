@@ -1,8 +1,8 @@
 unit uQOI;
 {
-  功能：test qoi lossless image compression / Uncompression
-  时间：2021-11-29
-  作者：dbyoung@sina.com
+  FUNC: test qoi lossless image compression / Uncompression
+  Auth: 2021-11-29
+  Time: dbyoung@sina.com
 }
 
 interface

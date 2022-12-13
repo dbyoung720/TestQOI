@@ -2,7 +2,7 @@ unit db.QOI;
 {
   FUNC: QOI Image Encode / Decode
   Auth: dbyoung@sina.com
-  Time: 2022-10-01
+  Time: 2021-11-29
 }
 
 interface
