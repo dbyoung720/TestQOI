@@ -116,6 +116,12 @@ var
 begin
   Count := 0;
 
+  // 如果当前像素值和上一个像素值相同，进行 QOI_OP_RUN 编码。run 必须在 1~62 内；
+  // 如果当 run 大于 62 时，63、64，编码为 0xFE, 0xFF，这与 QOI_OP_RGB、QOI_OP_RGBA 的值相同；
+  // 所以当 run 大于 62 时，应该进行多次 QOI_OP_RUN 编码；
+  // 这么做的目的是可以将当前像素编码为1个字节；
+  // 32位位图，像素压缩率25%；
+  // 24位位图，像素压缩率33%；
   if px^.V = px_prev.V then
   begin
     Inc(run);
@@ -128,6 +134,7 @@ begin
   end
   else
   begin
+    // run 在 1 --- 61 之间
     if (run > 0) then
     begin
       Result[Count] := QOI_OP_RUN or (run - 1);
@@ -135,15 +142,22 @@ begin
       run := 0;
     end;
 
+    // 对当前颜色进行索引（64长度的颜色索引表）
     index_pos := QOI_COLOR_HASH(px^);
     if (index[index_pos].V = px^.V) then
     begin
+      // 如果索引表中刚好有，进行 QOI_OP_INDEX 编码；将当前像素编码为1个字节；
+      // 32位位图，像素压缩率25%；
+      // 24位位图，像素压缩率33%；
       Result[Count] := QOI_OP_INDEX or index_pos;
       Inc(Count);
     end
     else
     begin
+      // 没在索引表中，写入索引表
       index[index_pos] := px^;
+
+      // 如果透明度相同
       if (px^.rgba.a = px_prev.rgba.a) then
       begin
         vr   := px^.rgba.r - px_prev.rgba.r;
@@ -151,19 +165,28 @@ begin
         vb   := px^.rgba.b - px_prev.rgba.b;
         vg_r := vr - vg;
         vg_b := vb - vg;
+
         if ((vr > -3) and (vr < 2) and (vg > -3) and (vg < 2) and (vb > -3) and (vb < 2)) then
         begin
+          // 当前像素与上一个像素的颜色值差异在 -3 和 2 之间。进行 QOI_OP_DIFF 编码。目的是可以将当前像素编码为1个字节；
+          // 32位位图，像素压缩率25%；
+          // 24位位图，像素压缩率33%；
           Result[Count] := QOI_OP_DIFF or (vr + 2) shl 4 or (vg + 2) shl 2 or (vb + 2);
           Inc(Count);
         end
         else if ((vg_r > -9) and (vg_r < 8) and (vg > -33) and (vg < 32) and (vg_b > -9) and (vg_b < 8)) then
         begin
+          // 当前像素与上一个像素的颜色值差异较大。进行 QOI_OP_LUMA 编码。目的是可以将当前像素编码为2个字节；
+          // 32位位图，像素压缩率50%；
+          // 24位位图，像素压缩率66%；
           Result[Count + 0] := QOI_OP_LUMA or (vg + 32);
           Result[Count + 1] := (vg_r + 8) shl 4 or (vg_b + 8);
           Inc(Count, 2);
         end
         else
         begin
+          // 进行 QOI_OP_RGB 编码。4个字节。直接存像素值了，没有任何压缩了；反而多了一个字节；
+          // 24位位图，像素压缩率133%；
           Result[Count + 0] := QOI_OP_RGB;
           Result[Count + 1] := px^.rgba.r;
           Result[Count + 2] := px^.rgba.g;
@@ -173,6 +196,8 @@ begin
       end
       else
       begin
+        // 透明度不相同，进行 QOI_OP_RGBA 编码。5个字节。直接存像素值了，没有任何压缩了；反而多了一个字节；
+        // 32位位图，像素压缩率125%；
         Result[Count + 0] := QOI_OP_RGBA;
         Result[Count + 1] := px^.rgba.r;
         Result[Count + 2] := px^.rgba.g;
@@ -183,11 +208,20 @@ begin
     end;
   end;
 
+  // 返回结果
   Result[5] := Count;
-  px_prev   := px^;
+
+  // 当前像素值付给上一个像素
+  px_prev := px^;
 end;
 
-{ QOI ENCODE }
+{
+  QOI ENCODE
+  QOI 图像只能储存 24位 RGB 或 32位 RGBA 格式的图像；
+  QOI 里对像素编码一共有 6 种方式: QOI_OP_RGB, QOI_OP_RGBA, QOI_OP_DIFF, QOI_OP_LUMA, QOI_OP_RUN 和 QOI_OP_INDEX；
+  压缩率: QOI_OP_RUN ≤ QOI_OP_INDEX = QOI_OP_DIFF < QOI_OP_LUMA < QOI_OP_RGB = QOI_OP_RGBA；
+  下面的编码函数也是按照这个压缩率排行进行编码的；
+}
 function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer): Pointer;
 var
   I, max_size  : Integer;
@@ -203,14 +237,16 @@ var
 begin
   Result := nil;
 
+  // 图像合法性判断
   if (Buffer = nil) or (intlen = -1) or (desc.Width = 0) or (desc.Height = 0) or (desc.Channels < 3) or (desc.Channels > 4) or (desc.Colorspace > 1) or (desc.Height >= QOI_pixels_MAX div desc.Width) then
     Exit;
 
+  // 编码的总大小（最大值。实际大小，编码结束后，会返回实际值：out_len 变量）
   max_size    := desc.Width * desc.Height * (desc.Channels + 1) + SizeOf(TQOIHeader) + qoi_padding_size;
   bytes       := AllocMem(max_size);
   intStartPos := Integer(bytes);
 
-  // write header
+  // 写入文件头
   qoi_write_32(bytes, QOI_MAGIC);
   Inc(bytes, 4);
 
@@ -226,12 +262,13 @@ begin
   qoi_write_8(bytes, 0);
   Inc(bytes, 1);
 
+  // 变量初始化
   Width         := desc.Width;
   Height        := desc.Height;
   StartScanLine := Integer(Buffer);
   bmpWidthBytes := desc.Width * desc.Channels;
 
-  // start encode
+  // 开始进行编码
   for Y := 0 to Height - 1 do
   begin
     px    := PQOI_RGBA_T(StartScanLine + Y * bmpWidthBytes);
@@ -249,15 +286,15 @@ begin
     end;
   end;
 
-  // write end sign
+  // 写入结束标记
   for I := 0 to 7 do
     qoi_write_8(bytes, qoi_padding[I]);
   Inc(bytes, 8);
 
-  // return actual length
+  // 返回实际长度
   intlen := Integer(bytes) - intStartPos;
 
-  // return encode address
+  // 返回编码内存地址
   Result := PByte(intStartPos);
 end;
 
