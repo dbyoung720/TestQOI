@@ -1,24 +1,29 @@
 unit db.QOI;
+{
+  FUNC: QOI Image Encode / Decode
+  Auth: dbyoung@sina.com
+  Time: 2022-10-01
+}
 
 interface
 
 type
-  qoi_desc2 = packed record
-    magic: Cardinal;
-    width: Cardinal;
-    height: Cardinal;
-    channels: Byte;
-    colorspace: Byte;
+  { QOI Header; 14 bytes }
+  TQOIHeader = packed record
+    Magic: Cardinal;
+    Width: Cardinal;
+    Height: Cardinal;
+    Channels: Byte;
+    Colorspace: Byte;
   end;
 
-  Tqoi_desc2 = qoi_desc2;
-  Pqoi_desc2 = ^Tqoi_desc2;
+  PQOIHeader = ^TQOIHeader;
 
 { QOI ENCODE }
-function qoi_encode_pascal(const data: Pointer; const desc: Pqoi_desc2; var out_len: Integer): Pointer;
+function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer): Pointer;
 
 { QOI DECODE }
-function qoi_decode_pascal(const data: Pointer; Size: Integer; var desc: Tqoi_desc2; channels: Integer): Pointer;
+function qoi_decode_pascal(const Buffer: Pointer; const BufferSize: Integer; const Channels: Integer; var desc: TQOIHeader; var Count: Integer): Pointer;
 
 implementation
 
@@ -33,31 +38,30 @@ const
   QOI_OP_RGBA                         = $FF;
   QOI_MASK_2                          = $C0;
   QOI_MAGIC: Cardinal                 = $66696F71;
-  QOI_HEADER_SIZE                     = 14;
   QOI_pixels_MAX                      = 400000000;
   qoi_padding_size                    = 8;
   qoi_padding: array [0 .. 7] of Byte = (0, 0, 0, 0, 0, 0, 0, 1);
 
 type
-  _rgba = record
+  _RGBA = record
     r, g, b, a: Byte;
   end;
 
-  qoi_rgba_t = packed record
+  QOI_RGBA_T = packed record
     case Boolean of
       false:
-        (rgba: _rgba);
+        (rgba: _RGBA);
       true:
         (V: Cardinal);
   end;
 
-  Tqoi_rgba_t = qoi_rgba_t;
-  Pqoi_rgba_t = ^Tqoi_rgba_t;
+  TQOI_RGBA_T = QOI_RGBA_T;
+  PQOI_RGBA_T = ^TQOI_RGBA_T;
 
-  TArrQoi_rgba_t = array [0 .. 63] of Tqoi_rgba_t;
-  TSixByteArray  = array [0 .. 5] of Byte;
+  TArrQoi_rgba_t = array [0 .. 63] of TQOI_RGBA_T;
+  TArrSixByte    = array [0 .. 5] of Byte;
 
-function QOI_COLOR_HASH(c: Tqoi_rgba_t): Byte; inline;
+function QOI_COLOR_HASH(c: TQOI_RGBA_T): Byte; inline;
 begin
   Result := (c.rgba.r * 3 + c.rgba.g * 5 + c.rgba.b * 7 + c.rgba.a * 11) and $3F;
 end;
@@ -77,7 +81,7 @@ begin
   P^ := val;
 end;
 
-procedure qoi_write_arr(const P: PByte; const val: TSixByteArray; const Count: Integer); inline;
+procedure qoi_write_arr(const P: PByte; const val: TArrSixByte; const Count: Integer); inline;
 begin
   if Count = 1 then
     qoi_write_8(P, val[0])
@@ -89,7 +93,7 @@ begin
     Move(val[0], P^, Count);
 end;
 
-function qoi_encode_pascal_parallel(const px: Pqoi_rgba_t): TSixByteArray; inline;
+function qoi_encode_pascal_parallel(const px: PQOI_RGBA_T): TArrSixByte; inline;
 {$J+}
 const
   run: Integer          = 0;
@@ -103,7 +107,7 @@ const
     (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
     (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0)  //
     );
-  px_prev: Tqoi_rgba_t = (V: $FF000000);
+  px_prev: TQOI_RGBA_T = (V: $FF000000);
 {$J-}
 var
   vr, vg, vb, vg_r, vg_b: Integer;
@@ -184,56 +188,54 @@ begin
 end;
 
 { QOI ENCODE }
-function qoi_encode_pascal(const data: Pointer; const desc: Pqoi_desc2; var out_len: Integer): Pointer;
+function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer): Pointer;
 var
   I, max_size  : Integer;
   intStartPos  : Integer;
   StartScanLine: Integer;
   bmpWidthBytes: Integer;
-  width, height: Integer;
+  Width, Height: Integer;
   bytes        : PByte;
-  px           : Pqoi_rgba_t;
+  px           : PQOI_RGBA_T;
   X, Y         : Integer;
-  tmpArr       : TSixByteArray;
+  tmpArr       : TArrSixByte;
   intCount     : Integer;
 begin
   Result := nil;
 
-  if (data = nil) or (out_len = -1) or (desc = nil) or //
-    (desc^.width = 0) or (desc^.height = 0) or         //
-    (desc^.channels < 3) or (desc^.channels > 4) or    //
-    (desc^.colorspace > 1) or                          //
-    (desc^.height >= QOI_pixels_MAX div desc^.width) then
+  if (Buffer = nil) or (intlen = -1) or (desc.Width = 0) or (desc.Height = 0) or (desc.Channels < 3) or (desc.Channels > 4) or (desc.Colorspace > 1) or (desc.Height >= QOI_pixels_MAX div desc.Width) then
     Exit;
 
-  max_size    := desc^.width * desc^.height * (desc^.channels + 1) + QOI_HEADER_SIZE + qoi_padding_size;
+  max_size    := desc.Width * desc.Height * (desc.Channels + 1) + SizeOf(TQOIHeader) + qoi_padding_size;
   bytes       := AllocMem(max_size);
   intStartPos := Integer(bytes);
 
+  // write header
   qoi_write_32(bytes, QOI_MAGIC);
   Inc(bytes, 4);
 
-  qoi_write_32(bytes, desc^.width);
+  qoi_write_32(bytes, desc.Width);
   Inc(bytes, 4);
 
-  qoi_write_32(bytes, desc^.height);
+  qoi_write_32(bytes, desc.Height);
   Inc(bytes, 4);
 
-  qoi_write_8(bytes, desc^.channels);
+  qoi_write_8(bytes, desc.Channels);
   Inc(bytes, 1);
 
   qoi_write_8(bytes, 0);
   Inc(bytes, 1);
 
-  width         := desc^.width;
-  height        := desc^.height;
-  StartScanLine := Integer(data);
-  bmpWidthBytes := desc^.width * desc^.channels;
+  Width         := desc.Width;
+  Height        := desc.Height;
+  StartScanLine := Integer(Buffer);
+  bmpWidthBytes := desc.Width * desc.Channels;
 
-  for Y := 0 to height - 1 do
+  // start encode
+  for Y := 0 to Height - 1 do
   begin
-    px    := Pqoi_rgba_t(StartScanLine + Y * bmpWidthBytes);
-    for X := 0 to width - 1 do
+    px    := PQOI_RGBA_T(StartScanLine + Y * bmpWidthBytes);
+    for X := 0 to Width - 1 do
     begin
       tmpArr   := qoi_encode_pascal_parallel(px);
       intCount := tmpArr[5];
@@ -247,12 +249,16 @@ begin
     end;
   end;
 
+  // write end sign
   for I := 0 to 7 do
     qoi_write_8(bytes, qoi_padding[I]);
   Inc(bytes, 8);
 
-  out_len := Integer(bytes) - intStartPos;
-  Result  := PByte(intStartPos);
+  // return actual length
+  intlen := Integer(bytes) - intStartPos;
+
+  // return encode address
+  Result := PByte(intStartPos);
 end;
 
 function qoi_decode_pascal_parallel(const bytes: PByte; const intPos: Integer; var Count: Integer): Cardinal; inline;
@@ -269,7 +275,7 @@ const
     (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
     (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0)  //
     );
-  px: Tqoi_rgba_t = (V: $FF000000);
+  px: TQOI_RGBA_T = (V: $FF000000);
 {$J-}
 var
   b1, b2: Byte;
@@ -297,14 +303,8 @@ begin
     end
     else if (b1 = QOI_OP_RGBA) then
     begin
-      px.rgba.r := bytes[intPos + Count];
-      Inc(Count);
-      px.rgba.g := bytes[intPos + Count];
-      Inc(Count);
-      px.rgba.b := bytes[intPos + Count];
-      Inc(Count);
-      px.rgba.a := bytes[intPos + Count];
-      Inc(Count);
+      px.V := PCardinal(bytes[intPos])^;
+      Inc(Count, 4);
     end
     else if ((b1 and QOI_MASK_2) = QOI_OP_INDEX) then
     begin
@@ -337,50 +337,44 @@ begin
 end;
 
 { QOI DECODE }
-function qoi_decode_pascal(const data: Pointer; Size: Integer; var desc: Tqoi_desc2; channels: Integer): Pointer;
+function qoi_decode_pascal(const Buffer: Pointer; const BufferSize: Integer; const Channels: Integer; var desc: TQOIHeader; var Count: Integer): Pointer;
 var
   bytes        : PByte;
   StartScanLine: Integer;
   bmpWidthBytes: Integer;
-  width, height: Integer;
+  Width, Height: Integer;
   X, Y         : Integer;
-  pixels       : Pqoi_rgba_t;
+  pixels       : PQOI_RGBA_T;
   intPos       : Integer;
-  Count        : Integer;
+  intlen       : Integer;
 begin
   Result := nil;
+  Count  := 0;
 
-  if (data = nil) or (@desc = nil) or                            //
-    ((channels <> 0) and (channels <> 3) and (channels <> 4)) or //
-    (Size < QOI_HEADER_SIZE + SizeOf(qoi_padding)) then
+  if (Buffer = nil) or (@desc = nil) or ((Channels <> 0) and (Channels <> 3) and (Channels <> 4)) or (BufferSize < SizeOf(TQOIHeader) + SizeOf(qoi_padding)) then
     Exit;
 
-  bytes := data;
+  bytes := Buffer;
+  Move(bytes^, desc, SizeOf(TQOIHeader));
 
-  Move(bytes^, desc, SizeOf(Tqoi_desc2));
-
-  if (desc.width = 0) or (desc.height = 0) or     //
-    (desc.channels < 3) or (desc.channels > 4) or //
-    (desc.colorspace > 1) or                      //
-    (desc.height >= QOI_pixels_MAX div desc.width) then
+  if (desc.Width = 0) or (desc.Height = 0) or (desc.Channels < 3) or (desc.Channels > 4) or (desc.Colorspace > 1) or (desc.Height >= QOI_pixels_MAX div desc.Width) then
     Exit;
 
-  Result := AllocMem(desc.width * desc.height * desc.channels);
-
-  width         := desc.width;
-  height        := desc.height;
+  intPos        := SizeOf(TQOIHeader);
+  Width         := desc.Width;
+  Height        := desc.Height;
+  bmpWidthBytes := desc.Width * desc.Channels;
+  Count         := bmpWidthBytes * Height;
+  Result        := AllocMem(Count);
   StartScanLine := Integer(Result);
-  bmpWidthBytes := desc.width * desc.channels;
-  intPos        := 14;
 
-  for Y := 0 to height - 1 do
+  for Y := Height - 1 downto 0 do
   begin
-    pixels := Pqoi_rgba_t(StartScanLine + Y * bmpWidthBytes);
-    for X  := 0 to width - 1 do
+    pixels := PQOI_RGBA_T(StartScanLine + Y * bmpWidthBytes);
+    for X  := 0 to Width - 1 do
     begin
-      pixels^.V := qoi_decode_pascal_parallel(bytes, intPos, Count);
-      Inc(intPos, Count);
-
+      pixels^.V := qoi_decode_pascal_parallel(bytes, intPos, intlen);
+      Inc(intPos, intlen);
       Inc(pixels);
     end;
   end;
