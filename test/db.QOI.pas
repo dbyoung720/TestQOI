@@ -19,7 +19,7 @@ type
     Colorspace: Byte;
   end;
 
-  { QOI 编码 }
+ { QOI 编码 }
 function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer): Pointer;
 
 { QOI 解码 }
@@ -65,7 +65,7 @@ type
   // 6 字节数组
   TArrSixByte = array [0 .. 5] of Byte;
 
-  { 颜色值进行 HASH 运算 }
+ { 颜色值进行 HASH 运算 }
 function QOI_COLOR_HASH(c: TQOI_RGBA_T): Byte; inline;
 begin
   Result := (c.rgba.r * 3 + c.rgba.g * 5 + c.rgba.b * 7 + c.rgba.a * 11) and QOI_IndexTable_len;
