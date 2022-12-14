@@ -34,36 +34,51 @@ type
 
 procedure TForm1.btnPNGClick(Sender: TObject);
 var
-  png   : TPngImage;
-  bmp   : TBitmap;
-  T1, T2: Int64;
+  pngEnc, pngDec: TPngImage;
+  bmpEnc, bmpDec: TBitmap;
+  T1, T2        : Int64;
+  memTemp       : TMemoryStream;
 begin
   btnPNG.Enabled  := False;
   imgShow.Picture := nil;
   Application.ProcessMessages;
 
-  png := TPngImage.Create;
-  bmp := TBitmap.Create;
+  pngEnc  := TPngImage.Create;
+  pngDec  := TPngImage.Create;
+  bmpEnc  := TBitmap.Create;
+  bmpDec  := TBitmap.Create;
+  memTemp := TMemoryStream.Create;
   try
-    bmp.LoadFromFile('..\..\4K.bmp');
-    bmp.PixelFormat := pf32bit;
+    bmpEnc.LoadFromFile('..\..\4K.bmp');
+    bmpEnc.PixelFormat := pf32bit;
+    bmpDec.PixelFormat := pf32bit;
 
     { PNG encode }
     with TStopwatch.StartNew do
     begin
-      png.Assign(bmp);
+      pngEnc.Assign(bmpEnc);
+      pngEnc.SaveToStream(memTemp);
       T1 := ElapsedMilliseconds;
     end;
 
     { PNG decode }
     with TStopwatch.StartNew do
     begin
-      imgShow.Picture.Bitmap.Assign(png);
+      memTemp.Position := 0;
+      pngDec.LoadFromStream(memTemp);
+      bmpDec.Width  := pngDec.Width;
+      bmpDec.Height := pngDec.Height;
+      bmpDec.Canvas.CopyRect(bmpDec.Canvas.ClipRect, pngDec.Canvas, bmpDec.Canvas.ClipRect);
       T2 := ElapsedMilliseconds;
     end;
+
+    imgShow.Picture.Bitmap.Assign(bmpDec);
   finally
-    bmp.Free;
-    png.Free;
+    bmpEnc.Free;
+    bmpDec.Free;
+    pngEnc.Free;
+    pngDec.Free;
+    memTemp.Free;
     btnPNG.Enabled := True;
   end;
   Caption := Format('PNG encode£º%d ms£»decode£º%d ms', [T1, T2]);
