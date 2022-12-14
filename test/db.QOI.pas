@@ -10,6 +10,7 @@ interface
 type
   { QOI 文件头; 14 bytes }
   PQOIHeader = ^TQOIHeader;
+  PlossyCfg  = ^TlossyCfg;
 
   TQOIHeader = packed record
     Magic: Cardinal;
@@ -19,8 +20,14 @@ type
     Colorspace: Byte;
   end;
 
-{ QOI 编码 }
-function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer): Pointer;
+  TlossyCfg = packed record
+    weight: array [0 .. 3] of Double;
+    ThreshLow, ThreshHigh: Double;
+    mulAlpha: Integer;
+  end;
+
+  { QOI 编码 }
+function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer; const lossyCfg: PlossyCfg = nil): Pointer;
 
 { QOI 解码 }
 function qoi_decode_pascal(const Buffer: Pointer; const BufferSize: Integer; const Channels: Integer; var desc: TQOIHeader; var Count: Integer): Pointer;
@@ -65,7 +72,7 @@ type
   // 6 字节数组
   TArrSixByte = array [0 .. 5] of Byte;
 
-{ 颜色值进行 HASH 运算 }
+  { 颜色值进行 HASH 运算 }
 function QOI_COLOR_HASH(c: TQOI_RGBA_T): Byte; inline;
 begin
   Result := (c.rgba.r * 3 + c.rgba.g * 5 + c.rgba.b * 7 + c.rgba.a * 11) and QOI_IndexTable_len;
@@ -243,7 +250,7 @@ end;
   压缩率越小越好；
   下面的编码函数也是按照这个压缩率排行进行编码的；
 }
-function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer): Pointer;
+function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer; const lossyCfg: PlossyCfg = nil): Pointer;
 var
   I, max_size  : Integer;
   intStartPos  : Integer;

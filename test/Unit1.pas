@@ -13,10 +13,12 @@ type
     imgShow: TImage;
     btnQoiImage: TButton;
     btnQoiDBYOUNG: TButton;
+    btnQoilossy: TButton;
     procedure btnPNGClick(Sender: TObject);
     procedure btnQoiClick(Sender: TObject);
     procedure btnQoiImageClick(Sender: TObject);
     procedure btnQoiDBYOUNGClick(Sender: TObject);
+    procedure btnQoilossyClick(Sender: TObject);
   end;
 
 var
@@ -243,6 +245,11 @@ begin
     btnQoiDBYOUNG.Enabled := True;
   end;
   Caption := Format('Qoi encode£º%d ms£»decode£º%d ms', [T1, T2]);
+end;
+
+procedure TForm1.btnQoilossyClick(Sender: TObject);
+begin
+  //
 end;
 
 end.
