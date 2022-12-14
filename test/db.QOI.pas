@@ -1,6 +1,6 @@
 unit db.QOI;
 {
-  FUNC: QOI Image Encode / Decode
+  FUNC: QOI 图像 编码 / 解码
   Auth: dbyoung@sina.com
   Time: 2021-11-29
 }
@@ -8,7 +8,9 @@ unit db.QOI;
 interface
 
 type
-  { QOI Header; 14 bytes }
+  { QOI 文件头; 14 bytes }
+  PQOIHeader = ^TQOIHeader;
+
   TQOIHeader = packed record
     Magic: Cardinal;
     Width: Cardinal;
@@ -17,17 +19,15 @@ type
     Colorspace: Byte;
   end;
 
-  PQOIHeader = ^TQOIHeader;
-
-  { QOI ENCODE }
+  { QOI 编码 }
 function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer): Pointer;
 
-{ QOI DECODE }
+{ QOI 解码 }
 function qoi_decode_pascal(const Buffer: Pointer; const BufferSize: Integer; const Channels: Integer; var desc: TQOIHeader; var Count: Integer): Pointer;
 
 implementation
 
-uses System.Threading, System.SyncObjs;
+uses Winapi.Windows, System.Threading, System.SyncObjs;
 
 const
   QOI_OP_INDEX                        = $0;
@@ -40,11 +40,12 @@ const
   QOI_MAGIC: Cardinal                 = $66696F71;
   QOI_pixels_MAX                      = 400000000;
   qoi_padding_size                    = 8;
+  QOI_IndexTable_len                  = 63;
   qoi_padding: array [0 .. 7] of Byte = (0, 0, 0, 0, 0, 0, 0, 1);
 
 type
   _RGBA = record
-    r, g, b, a: Byte;
+    b, g, r, a: Byte;
   end;
 
   QOI_RGBA_T = packed record
@@ -58,29 +59,37 @@ type
   TQOI_RGBA_T = QOI_RGBA_T;
   PQOI_RGBA_T = ^TQOI_RGBA_T;
 
-  TArrQoi_rgba_t = array [0 .. 63] of TQOI_RGBA_T;
-  TArrSixByte    = array [0 .. 5] of Byte;
+  // 64长度的颜色索引表
+  TArrQoi_rgba_t = array [0 .. QOI_IndexTable_len] of TQOI_RGBA_T;
 
+  // 6 字节数组
+  TArrSixByte = array [0 .. 5] of Byte;
+
+  { 颜色值进行 HASH 运算 }
 function QOI_COLOR_HASH(c: TQOI_RGBA_T): Byte; inline;
 begin
-  Result := (c.rgba.r * 3 + c.rgba.g * 5 + c.rgba.b * 7 + c.rgba.a * 11) and $3F;
+  Result := (c.rgba.r * 3 + c.rgba.g * 5 + c.rgba.b * 7 + c.rgba.a * 11) and QOI_IndexTable_len;
 end;
 
+{ 写入32位整形数值 }
 procedure qoi_write_32(const P: PByte; const val: Cardinal); inline;
 begin
   PCardinal(P)^ := val;
 end;
 
+{ 写入16位WORD数值 }
 procedure qoi_write_16(const P: PByte; const val: WORD); inline;
 begin
   PWORD(P)^ := val;
 end;
 
+{ 写入8位Byte数值 }
 procedure qoi_write_8(const P: PByte; const val: Byte); inline;
 begin
   P^ := val;
 end;
 
+{ 一次性写入 }
 procedure qoi_write_arr(const P: PByte; const val: TArrSixByte; const Count: Integer); inline;
 begin
   if Count = 1 then
@@ -93,10 +102,9 @@ begin
     Move(val[0], P^, Count);
 end;
 
-function qoi_encode_pascal_parallel(const px: PQOI_RGBA_T): TArrSixByte; inline;
+function qoi_encode_pascal_parallel(const px: PQOI_RGBA_T; var run: Integer; var px_prev: TQOI_RGBA_T): TArrSixByte; inline;
 {$J+}
 const
-  run: Integer          = 0;
   index: TArrQoi_rgba_t = (                                         //
     (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
     (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
@@ -107,7 +115,6 @@ const
     (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), //
     (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0), (V: 0)  //
     );
-  px_prev: TQOI_RGBA_T = (V: $FF000000);
 {$J-}
 var
   vr, vg, vb, vg_r, vg_b: Integer;
@@ -115,13 +122,15 @@ var
   Count                 : Integer;
 begin
   Count := 0;
-
-  // 如果当前像素值和上一个像素值相同，进行 QOI_OP_RUN 编码。run 必须在 1~62 内；
-  // 如果当 run 大于 62 时，63、64，编码为 0xFE, 0xFF，这与 QOI_OP_RGB、QOI_OP_RGBA 的值相同；
-  // 所以当 run 大于 62 时，应该进行多次 QOI_OP_RUN 编码；
-  // 这么做的目的是可以将当前像素编码为1个字节；
-  // 32位位图，像素压缩率25%；
-  // 24位位图，像素压缩率33%；
+  {
+    如果当前像素值和上一个像素值相同，进行 QOI_OP_RUN 编码。run 必须在 1~62 内
+    run 使用一个字节的后6位，前两位当作标记位使用了。所以最大值理论上是 63。
+    但 63 (00,111111) 与 QOI_OP_RGBA(11,111111) 的后6位相同了。无法区分了。所以 run 最大值只能是 62 了)；
+    所以当 run 大于 62 时，应该进行多次 QOI_OP_RUN 编码；
+    这么做的目的是可以将当前像素编码为1个字节；
+    32位位图，像素压缩率25%；
+    24位位图，像素压缩率33%；
+  }
   if px^.V = px_prev.V then
   begin
     Inc(run);
@@ -134,7 +143,7 @@ begin
   end
   else
   begin
-    // run 在 1 --- 61 之间
+    { run 不为 0，表示遇到了当前像素和上一个像素不相同的了，要结束 QOI_OP_RUN 编码； }
     if (run > 0) then
     begin
       Result[Count] := QOI_OP_RUN or (run - 1);
@@ -142,22 +151,24 @@ begin
       run := 0;
     end;
 
-    // 对当前颜色进行索引（64长度的颜色索引表）
+    { 对当前颜色进行索引（64长度的颜色索引表） }
     index_pos := QOI_COLOR_HASH(px^);
     if (index[index_pos].V = px^.V) then
     begin
-      // 如果索引表中刚好有，进行 QOI_OP_INDEX 编码；将当前像素编码为1个字节；
-      // 32位位图，像素压缩率25%；
-      // 24位位图，像素压缩率33%；
+      {
+        如果索引表中刚好有，进行 QOI_OP_INDEX 编码；将当前像素编码为1个字节；
+        32位位图，像素压缩率25%；
+        24位位图，像素压缩率33%；
+      }
       Result[Count] := QOI_OP_INDEX or index_pos;
       Inc(Count);
     end
     else
     begin
-      // 没在索引表中，写入索引表
+      { 没在索引表中，写入索引表 }
       index[index_pos] := px^;
 
-      // 如果透明度相同
+      { 如果当前像素和上一个像素透明度相同，取 R、G、B 差值 }
       if (px^.rgba.a = px_prev.rgba.a) then
       begin
         vr   := px^.rgba.r - px_prev.rgba.r;
@@ -168,25 +179,31 @@ begin
 
         if ((vr > -3) and (vr < 2) and (vg > -3) and (vg < 2) and (vb > -3) and (vb < 2)) then
         begin
-          // 当前像素与上一个像素的颜色值差异在 -3 和 2 之间。进行 QOI_OP_DIFF 编码。目的是可以将当前像素编码为1个字节；
-          // 32位位图，像素压缩率25%；
-          // 24位位图，像素压缩率33%；
+          {
+            当前像素与上一个像素的颜色值差异在 -3 和 2 之间。进行 QOI_OP_DIFF 编码。目的是可以将当前像素编码为1个字节；
+            32位位图，像素压缩率25%；
+            24位位图，像素压缩率33%；
+          }
           Result[Count] := QOI_OP_DIFF or (vr + 2) shl 4 or (vg + 2) shl 2 or (vb + 2);
           Inc(Count);
         end
         else if ((vg_r > -9) and (vg_r < 8) and (vg > -33) and (vg < 32) and (vg_b > -9) and (vg_b < 8)) then
         begin
-          // 当前像素与上一个像素的颜色值差异较大。进行 QOI_OP_LUMA 编码。目的是可以将当前像素编码为2个字节；
-          // 32位位图，像素压缩率50%；
-          // 24位位图，像素压缩率66%；
+          {
+            当前像素与上一个像素的颜色值差异较大。进行 QOI_OP_LUMA 编码。目的是可以将当前像素编码为2个字节；
+            32位位图，像素压缩率50%；
+            24位位图，像素压缩率66%；
+          }
           Result[Count + 0] := QOI_OP_LUMA or (vg + 32);
           Result[Count + 1] := (vg_r + 8) shl 4 or (vg_b + 8);
           Inc(Count, 2);
         end
         else
         begin
-          // 进行 QOI_OP_RGB 编码。4个字节。直接存像素值了，没有任何压缩了；反而多了一个字节；
-          // 24位位图，像素压缩率133%；
+          {
+            进行 QOI_OP_RGB 编码。4个字节。直接存像素值了，没有任何压缩了；反而多了一个字节；
+            24位位图，像素压缩率133%；
+          }
           Result[Count + 0] := QOI_OP_RGB;
           Result[Count + 1] := px^.rgba.r;
           Result[Count + 2] := px^.rgba.g;
@@ -196,8 +213,11 @@ begin
       end
       else
       begin
-        // 透明度不相同，进行 QOI_OP_RGBA 编码。5个字节。直接存像素值了，没有任何压缩了；反而多了一个字节；
-        // 32位位图，像素压缩率125%；
+        {
+          透明度不相同，进行 QOI_OP_RGBA 编码。5个字节。直接存像素值了，没有任何压缩了；反而多了一个字节；
+          32位位图，像素压缩率125%；
+          一般情况下，一副32位位图，它的透明度基本是一致的。不会发生改变。所以这里被执行到的可能性很小；
+        }
         Result[Count + 0] := QOI_OP_RGBA;
         Result[Count + 1] := px^.rgba.r;
         Result[Count + 2] := px^.rgba.g;
@@ -208,18 +228,19 @@ begin
     end;
   end;
 
-  // 返回结果
+  { 返回结果 }
   Result[5] := Count;
 
-  // 当前像素值付给上一个像素
+  { 当前像素值付给上一个像素 }
   px_prev := px^;
 end;
 
 {
-  QOI ENCODE
+  QOI 图像编码
   QOI 图像只能储存 24位 RGB 或 32位 RGBA 格式的图像；
   QOI 里对像素编码一共有 6 种方式: QOI_OP_RGB, QOI_OP_RGBA, QOI_OP_DIFF, QOI_OP_LUMA, QOI_OP_RUN 和 QOI_OP_INDEX；
   压缩率: QOI_OP_RUN ≤ QOI_OP_INDEX = QOI_OP_DIFF < QOI_OP_LUMA < QOI_OP_RGB = QOI_OP_RGBA；
+  压缩率越小越好；
   下面的编码函数也是按照这个压缩率排行进行编码的；
 }
 function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer): Pointer;
@@ -234,19 +255,24 @@ var
   X, Y         : Integer;
   tmpArr       : TArrSixByte;
   intCount     : Integer;
+  run          : Integer;
+  px_prev      : TQOI_RGBA_T;
+  index        : TArrQoi_rgba_t;
 begin
   Result := nil;
 
-  // 图像合法性判断
+  { 图像合法性判断 }
   if (Buffer = nil) or (intlen = -1) or (desc.Width = 0) or (desc.Height = 0) or (desc.Channels < 3) or (desc.Channels > 4) or (desc.Colorspace > 1) or (desc.Height >= QOI_pixels_MAX div desc.Width) then
     Exit;
 
-  // 编码的总大小（最大值。实际大小，编码结束后，会返回实际值：out_len 变量）
-  max_size    := desc.Width * desc.Height * (desc.Channels + 1) + SizeOf(TQOIHeader) + qoi_padding_size;
-  bytes       := AllocMem(max_size);
+  { 编码的总大小（最大值。实际大小，编码结束后，会返回实际值：out_len 变量） }
+  max_size := desc.Width * desc.Height * (desc.Channels + 1) + SizeOf(TQOIHeader) + qoi_padding_size;
+  bytes    := AllocMem(max_size);
+
+  { bytes 首地址 }
   intStartPos := Integer(bytes);
 
-  // 写入文件头
+  { 写入文件头 }
   qoi_write_32(bytes, QOI_MAGIC);
   Inc(bytes, 4);
 
@@ -262,22 +288,26 @@ begin
   qoi_write_8(bytes, 0);
   Inc(bytes, 1);
 
-  // 变量初始化
+  { 变量初始化 }
   Width         := desc.Width;
   Height        := desc.Height;
   StartScanLine := Integer(Buffer);
   bmpWidthBytes := desc.Width * desc.Channels;
+  run           := 0;
+  px_prev.V     := $FF000000;
+  FillChar(index, SizeOf(index), #0);
 
-  // 开始进行编码
+  { 开始进行编码 }
   for Y := 0 to Height - 1 do
   begin
     px    := PQOI_RGBA_T(StartScanLine + Y * bmpWidthBytes);
     for X := 0 to Width - 1 do
     begin
-      tmpArr   := qoi_encode_pascal_parallel(px);
+      tmpArr   := qoi_encode_pascal_parallel(px, run, px_prev);
       intCount := tmpArr[5];
       if intCount > 0 then
       begin
+        { 一次性写入 }
         qoi_write_arr(bytes, tmpArr, intCount);
         Inc(bytes, intCount);
       end;
@@ -286,15 +316,15 @@ begin
     end;
   end;
 
-  // 写入结束标记
+  { 写入结束标记 }
   for I := 0 to 7 do
     qoi_write_8(bytes, qoi_padding[I]);
   Inc(bytes, 8);
 
-  // 返回实际长度
+  { bytes 当前地址 - intStartPos 首地址 = 返回实际长度 }
   intlen := Integer(bytes) - intStartPos;
 
-  // 返回编码内存地址
+  { 返回 bytes 内存首地址 }
   Result := PByte(intStartPos);
 end;
 
@@ -373,7 +403,7 @@ begin
   Result := px.V;
 end;
 
-{ QOI DECODE }
+{ QOI 图像解码 }
 function qoi_decode_pascal(const Buffer: Pointer; const BufferSize: Integer; const Channels: Integer; var desc: TQOIHeader; var Count: Integer): Pointer;
 var
   bytes        : PByte;
