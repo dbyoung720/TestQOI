@@ -71,7 +71,7 @@ type
     mulAlpha: Integer;
   end;
 
-{ QOI 编码 }
+  { QOI 编码 }
 function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer; const lossyCfg: PlossyCfg = nil): Pointer;
 
 { QOI 解码 }
@@ -117,26 +117,31 @@ type
   // 6 字节数组
   TArrSixByte = array [0 .. 5] of Byte;
 
-  { 颜色值进行 HASH 运算 }
+procedure LogErr(const strTemp: string);
+begin
+
+end;
+
+{ 颜色值进行 HASH 运算 }
 function QOI_COLOR_HASH(c: TQOI_RGBA_T): Byte; inline;
 begin
   Result := (c.rgba.r * 3 + c.rgba.g * 5 + c.rgba.b * 7 + c.rgba.a * 11) and QOI_IndexTable_len;
 end;
 
 { 写入32位整形数值 }
-procedure qoi_write_32(const P: PByte; const Val: DWORD); inline;
+procedure qoi_write_32(var P: PByte; const Val: DWORD); inline;
 begin
   PDWORD(P)^ := Val;
 end;
 
 { 写入16位WORD数值 }
-procedure qoi_write_16(const P: PByte; const Val: WORD); inline;
+procedure qoi_write_16(var P: PByte; const Val: WORD); inline;
 begin
   PWORD(P)^ := Val;
 end;
 
 { 写入8位Byte数值 }
-procedure qoi_write_8(const P: PByte; const Val: Byte); inline;
+procedure qoi_write_8(var P: PByte; const Val: Byte); inline;
 begin
   P^ := Val;
 end;
