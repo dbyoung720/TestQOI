@@ -140,7 +140,7 @@ begin
     bmpDst.Free;
     btnQOI.Enabled := True;
   end;
-  Caption := Format('Qoi encode£º%d ms£»decode£º%0.3d ms', [T1, T2]);
+  Caption := Format('Qoi encode£º%d ms£»decode£º%d ms', [T1, T2]);
 end;
 
 procedure TForm1.btnQoiImageClick(Sender: TObject);
@@ -216,12 +216,21 @@ begin
     { QOI encode }
     with TStopwatch.StartNew do
     begin
+      hQOI.Magic      := QOI_MAGIC;
       hQOI.Width      := bmpSrc.Width;
       hQOI.Height     := bmpSrc.Height;
       hQOI.channels   := 4;
       hQOI.colorspace := 0;
-      pixelsQOI       := qoi_encode_pascal(srcBits, hQOI, outlen);
+      pixelsQOI       := qoi_encode_pascal_lossl(srcBits, hQOI, outlen);
       T1              := ElapsedMilliseconds;
+    end;
+
+    with TMemoryStream.Create do
+    begin
+      Write(hQOI, 14);
+      Write(pixelsQOI^, outlen);
+      SaveToFile('..\..\4K.qoi');
+      Free;
     end;
 
     { QOI decode }
@@ -248,8 +257,71 @@ begin
 end;
 
 procedure TForm1.btnQoilossyClick(Sender: TObject);
+var
+  bmpSrc   : TBitmap;
+  bmpDst   : TBitmap;
+  T1, T2   : Int64;
+  srcBits  : Pointer;
+  pixelsQOI: Pointer;
+  pixelsRGB: PByte;
+  hQOI     : TQOIHEADER;
+  outlen   : Integer;
+  Count    : Integer;
+  lossyCfg : PlossyCfg;
 begin
-  //
+  btnQoiDBYOUNG.Enabled := False;
+  imgShow.Picture       := nil;
+  Application.ProcessMessages;
+
+  lossyCfg := nil;
+  bmpSrc   := TBitmap.Create;
+  bmpDst   := TBitmap.Create;
+  try
+    bmpSrc.LoadFromFile('..\..\4K.bmp');
+    bmpSrc.PixelFormat := pf32bit;
+    srcBits            := TBitmapImageAccess(TBMPAccess(bmpSrc).FImage).FDIB.dsBm.bmBits;
+
+    { QOI encode }
+    with TStopwatch.StartNew do
+    begin
+      hQOI.Magic      := QOI_MAGIC;
+      hQOI.Width      := bmpSrc.Width;
+      hQOI.Height     := bmpSrc.Height;
+      hQOI.channels   := 4;
+      hQOI.colorspace := 0;
+      pixelsQOI       := qoi_encode_pascal_lossy(srcBits, hQOI, outlen, lossyCfg);
+      T1              := ElapsedMilliseconds;
+    end;
+
+    with TMemoryStream.Create do
+    begin
+      Write(hQOI, 14);
+      Write(pixelsQOI^, outlen);
+      SaveToFile('..\..\4K.qoiy');
+      Free;
+    end;
+
+    { QOI decode }
+    with TStopwatch.StartNew do
+    begin
+      pixelsRGB := qoi_decode_pascal(pixelsQOI, outlen, 0, hQOI, Count);
+      T2        := ElapsedMilliseconds;
+    end;
+
+    bmpDst.PixelFormat := pf32bit;
+    bmpDst.Width       := hQOI.Width;
+    bmpDst.Height      := hQOI.Height;
+    Move(pixelsRGB^, TBitmapImageAccess(TBMPAccess(bmpDst).FImage).FDIB.dsBm.bmBits^, Count);
+    imgShow.Picture.Bitmap.Assign(bmpDst);
+
+    Freemem(pixelsQOI);
+    Freemem(pixelsRGB);
+  finally
+    bmpSrc.Free;
+    bmpDst.Free;
+    btnQoiDBYOUNG.Enabled := True;
+  end;
+  Caption := Format('Qoi encode£º%d ms£»decode£º%d ms', [T1, T2]);
 end;
 
 end.

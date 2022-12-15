@@ -4,3 +4,5 @@
 *.cmd
 *.pdb
 /test/Win32/Debug/test.exe
+/test/4K.qoiy
+/test/4K.qoi
