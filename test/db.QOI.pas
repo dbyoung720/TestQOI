@@ -5,6 +5,50 @@ unit db.QOI;
   Time: 2021-11-29
 }
 
+{
+  .- QOI_OP_INDEX ----------.
+  |         Byte[0]         |
+  |  7  6  5  4  3  2  1  0 |
+  |-------+-----------------|
+  |  0  0 |     index       |
+  `-------------------------`
+
+  .- QOI_OP_DIFF -----------.
+  |         Byte[0]         |
+  |  7  6  5  4  3  2  1  0 |
+  |-------+-----+-----+-----|
+  |  0  1 |  dr |  dg |  db |
+  `-------------------------`
+
+  .- QOI_OP_LUMA -------------------------------------.
+  |         Byte[0]         |         Byte[1]         |
+  |  7  6  5  4  3  2  1  0 |  7  6  5  4  3  2  1  0 |
+  |-------+-----------------+-------------+-----------|
+  |  1  0 |  green diff     |   dr - dg   |  db - dg  |
+  `---------------------------------------------------`
+
+  .- QOI_OP_RUN ------------.
+  |         Byte[0]         |
+  |  7  6  5  4  3  2  1  0 |
+  |-------+-----------------|
+  |  1  1 |       run       |
+  `-------------------------`
+
+  .- QOI_OP_RGB ------------------------------------------.
+  |         Byte[0]         | Byte[1] | Byte[2] | Byte[3] |
+  |  7  6  5  4  3  2  1  0 | 7 .. 0  | 7 .. 0  | 7 .. 0  |
+  |-------------------------+---------+---------+---------|
+  |  1  1  1  1  1  1  1  0 |   red   |  green  |  blue   |
+  `-------------------------------------------------------`
+
+  .- QOI_OP_RGBA ---------------------------------------------------.
+  |         Byte[0]         | Byte[1] | Byte[2] | Byte[3] | Byte[4] |
+  |  7  6  5  4  3  2  1  0 | 7 .. 0  | 7 .. 0  | 7 .. 0  | 7 .. 0  |
+  |-------------------------+---------+---------+---------+---------|
+  |  1  1  1  1  1  1  1  1 |   red   |  green  |  blue   |  alpha  |
+  `-----------------------------------------------------------------`
+}
+
 interface
 
 type
@@ -26,7 +70,7 @@ type
     mulAlpha: Integer;
   end;
 
-  { QOI 编码 }
+{ QOI 编码 }
 function qoi_encode_pascal(const Buffer: Pointer; const desc: TQOIHeader; var intlen: Integer; const lossyCfg: PlossyCfg = nil): Pointer;
 
 { QOI 解码 }
@@ -72,44 +116,46 @@ type
   // 6 字节数组
   TArrSixByte = array [0 .. 5] of Byte;
 
-  { 颜色值进行 HASH 运算 }
+{ 颜色值进行 HASH 运算 }
 function QOI_COLOR_HASH(c: TQOI_RGBA_T): Byte; inline;
 begin
   Result := (c.rgba.r * 3 + c.rgba.g * 5 + c.rgba.b * 7 + c.rgba.a * 11) and QOI_IndexTable_len;
 end;
 
 { 写入32位整形数值 }
-procedure qoi_write_32(const P: PByte; const val: Cardinal); inline;
+procedure qoi_write_32(const P: PByte; const Val: DWORD); inline;
 begin
-  PCardinal(P)^ := val;
+  PDWORD(P)^ := Val;
 end;
 
 { 写入16位WORD数值 }
-procedure qoi_write_16(const P: PByte; const val: WORD); inline;
+procedure qoi_write_16(const P: PByte; const Val: WORD); inline;
 begin
-  PWORD(P)^ := val;
+  PWORD(P)^ := Val;
 end;
 
 { 写入8位Byte数值 }
-procedure qoi_write_8(const P: PByte; const val: Byte); inline;
+procedure qoi_write_8(const P: PByte; const Val: Byte); inline;
 begin
-  P^ := val;
+  P^ := Val;
 end;
 
 { 一次性写入 }
-procedure qoi_write_arr(const P: PByte; const val: TArrSixByte; const Count: Integer); inline;
+procedure qoi_write_arr(var P: PByte; const Val: TArrSixByte; const Count: Integer); inline;
 begin
   if Count = 1 then
-    qoi_write_8(P, val[0])
+    qoi_write_8(P, Val[0])
   else if Count = 2 then
-    qoi_write_16(P, PWORD(@val)^)
+    qoi_write_16(P, PWORD(@Val[0])^)
   else if Count = 4 then
-    qoi_write_32(P, PCardinal(@val)^)
+    qoi_write_32(P, PDWORD(@Val[0])^)
   else
-    Move(val[0], P^, Count);
+    Move(Val[0], P^, Count);
+
+  Inc(P, Count);
 end;
 
-function qoi_encode_pascal_parallel(const px: PQOI_RGBA_T; var run: Integer; var px_prev: TQOI_RGBA_T): TArrSixByte; inline;
+procedure qoi_encode_pascal_parallel(const px: PQOI_RGBA_T; var px_prev: TQOI_RGBA_T; var run: Integer; var retResult: TArrSixByte; const lossyCfg: PlossyCfg = nil); inline;
 {$J+}
 const
   index: TArrQoi_rgba_t = (                                         //
@@ -143,7 +189,7 @@ begin
     Inc(run);
     if (run = 62) then
     begin
-      Result[Count] := QOI_OP_RUN or (run - 1);
+      retResult[Count] := QOI_OP_RUN or (run - 1);
       Inc(Count);
       run := 0;
     end;
@@ -153,7 +199,7 @@ begin
     { run 不为 0，表示遇到了当前像素和上一个像素不相同的了，要结束 QOI_OP_RUN 编码； }
     if (run > 0) then
     begin
-      Result[Count] := QOI_OP_RUN or (run - 1);
+      retResult[Count] := QOI_OP_RUN or (run - 1);
       Inc(Count);
       run := 0;
     end;
@@ -167,7 +213,7 @@ begin
         32位位图，像素压缩率25%；
         24位位图，像素压缩率33%；
       }
-      Result[Count] := QOI_OP_INDEX or index_pos;
+      retResult[Count] := QOI_OP_INDEX or index_pos;
       Inc(Count);
     end
     else
@@ -191,7 +237,7 @@ begin
             32位位图，像素压缩率25%；
             24位位图，像素压缩率33%；
           }
-          Result[Count] := QOI_OP_DIFF or (vr + 2) shl 4 or (vg + 2) shl 2 or (vb + 2);
+          retResult[Count] := QOI_OP_DIFF or (vr + 2) shl 4 or (vg + 2) shl 2 or (vb + 2);
           Inc(Count);
         end
         else if ((vg_r > -9) and (vg_r < 8) and (vg > -33) and (vg < 32) and (vg_b > -9) and (vg_b < 8)) then
@@ -201,8 +247,8 @@ begin
             32位位图，像素压缩率50%；
             24位位图，像素压缩率66%；
           }
-          Result[Count + 0] := QOI_OP_LUMA or (vg + 32);
-          Result[Count + 1] := (vg_r + 8) shl 4 or (vg_b + 8);
+          retResult[Count + 0] := QOI_OP_LUMA or (vg + 32);
+          retResult[Count + 1] := (vg_r + 8) shl 4 or (vg_b + 8);
           Inc(Count, 2);
         end
         else
@@ -211,10 +257,10 @@ begin
             进行 QOI_OP_RGB 编码。4个字节。直接存像素值了，没有任何压缩了；反而多了一个字节；
             24位位图，像素压缩率133%；
           }
-          Result[Count + 0] := QOI_OP_RGB;
-          Result[Count + 1] := px^.rgba.r;
-          Result[Count + 2] := px^.rgba.g;
-          Result[Count + 3] := px^.rgba.b;
+          retResult[Count + 0] := QOI_OP_RGB;
+          retResult[Count + 1] := px^.rgba.r;
+          retResult[Count + 2] := px^.rgba.g;
+          retResult[Count + 3] := px^.rgba.b;
           Inc(Count, 4);
         end
       end
@@ -225,18 +271,18 @@ begin
           32位位图，像素压缩率125%；
           一般情况下，一副32位位图，它的透明度基本是一致的。不会发生改变。所以这里被执行到的可能性很小；
         }
-        Result[Count + 0] := QOI_OP_RGBA;
-        Result[Count + 1] := px^.rgba.r;
-        Result[Count + 2] := px^.rgba.g;
-        Result[Count + 3] := px^.rgba.b;
-        Result[Count + 4] := px^.rgba.a;
+        retResult[Count + 0] := QOI_OP_RGBA;
+        retResult[Count + 1] := px^.rgba.r;
+        retResult[Count + 2] := px^.rgba.g;
+        retResult[Count + 3] := px^.rgba.b;
+        retResult[Count + 4] := px^.rgba.a;
         Inc(Count, 5);
       end;
     end;
   end;
 
   { 返回结果 }
-  Result[5] := Count;
+  retResult[5] := Count;
 
   { 当前像素值付给上一个像素 }
   px_prev := px^;
@@ -310,13 +356,12 @@ begin
     px    := PQOI_RGBA_T(StartScanLine + Y * bmpWidthBytes);
     for X := 0 to Width - 1 do
     begin
-      tmpArr   := qoi_encode_pascal_parallel(px, run, px_prev);
+      qoi_encode_pascal_parallel(px, px_prev, run, tmpArr, lossyCfg);
       intCount := tmpArr[5];
       if intCount > 0 then
       begin
         { 一次性写入 }
         qoi_write_arr(bytes, tmpArr, intCount);
-        Inc(bytes, intCount);
       end;
 
       Inc(px);
