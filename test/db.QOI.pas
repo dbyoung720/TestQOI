@@ -128,6 +128,20 @@ begin
   Inc(P, Count);
 end;
 
+{ 读取一个字节 }
+function ReadByte(var P: PByte): Byte; inline;
+begin
+  Result := P^;
+  Inc(P);
+end;
+
+{ 读取四个字节 }
+function ReadDWORD(var P: PByte): DWORD; inline;
+begin
+  Result := P^;
+  Inc(P, 4);
+end;
+
 { 开始 QOI 无损编码 }
 procedure qoi_encode_pascal_parallel_lossl(const px: PQOI_RGBA_T; var px_prev: TQOI_RGBA_T; var run: Integer; var retResult: TArrSixByte); inline;
 {$J+}
@@ -579,18 +593,6 @@ begin
 
   { 返回 bytes 内存首地址 }
   Result := PByte(intStartPos);
-end;
-
-function ReadByte(var P: PByte): Byte; inline;
-begin
-  Result := P^;
-  Inc(P);
-end;
-
-function ReadDWORD(var P: PByte): DWORD; inline;
-begin
-  Result := P^;
-  Inc(P, 4);
 end;
 
 { 开始 QOI 解码 }
